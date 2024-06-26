@@ -1,0 +1,4 @@
+*.code-workspace
+.vscode/launch.json
+*.ipynb
+__pycache__/
