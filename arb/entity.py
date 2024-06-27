@@ -1,26 +1,30 @@
+from nltk.corpus import wordnet as wn
+from nltk.corpus import framenet as fn
 from nltk.corpus.reader.wordnet import Lemma, Synset
 import numpy as np
 from sty import fg, bg, ef, rs
-
-entities = []
+import arb.util as util
 
 class Entity:
     def __init__(self, synset: Synset):
         self.synset: Synset = synset
+        self.lexunit = util.ss2lu(synset)
         self.name = self.gen_lemma().name().replace("_", " ")
 
-    def gen_lemma(self, weighted_by_freq: bool = True):
-        lemmas = [*self.synset.lemmas()]
-        if weighted_by_freq:
-            weights = np.array([l.count() for l in lemmas], dtype=np.float64)
-            # normalize so we dont overflow on softmax
-            weights /= max(1, weights.max())
-            # softmax
-            weights = np.exp(weights) / np.sum(np.exp(weights))
-            return np.random.choice(lemmas, p=weights)
-        else:
-            return np.random.choice(lemmas)
+    @staticmethod
+    def from_name(name: str):
+        ss = wn.synset(name)
+        if ss is None:
+            raise ValueError(f"No synset found for {name}")
+        return Entity(ss)
+    @staticmethod
+    def from_root(synset: Synset, depth=1, weighted_by_freq=True):
+        hypo = lambda s: s.hyponyms()
+        hypos = synset.closure(hypo, depth=depth)
+        return Entity(np.random.choice([*hypos]))
 
+    def gen_lemma(self, weighted_by_freq: bool = True):
+        return util.pick_random_lemma(self.synset, weighted_by_freq)
     def gen_cohyponym(
         self,
         part,
@@ -54,7 +58,6 @@ class Entity:
                     print(f"{fg.da_grey}reached root!{fg.rs}")
                 break
         return Entity(synset=synset)
-
     def gen_part(
         self,
         weighted_by_freq=False,
@@ -103,12 +106,8 @@ class Entity:
             )
         return Entity(choice)
 
-
-def from_root(synset: Synset, depth=1, weighted_by_freq=True):
-    hypo = lambda s: s.hyponyms()
-    hypos = synset.closure(hypo, depth=depth)
-    return Entity(np.random.choice([*hypos]))
-
+    def app(self, verb:str, src=None):
+        lu = fn.lus(verb)[0]
 
 def adj_from_root(synset: Synset, depth=1, weighted_by_freq=False):
     hypo = lambda s: s.hyponyms()
