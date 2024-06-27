@@ -4,16 +4,18 @@ from nltk.corpus.reader.wordnet import Lemma, Synset
 import numpy as np
 from sty import fg, bg, ef, rs
 import arb.util as util
+from arb.util import log
 
 class Entity:
     def __init__(self, synset: Synset):
         self.synset: Synset = synset
         self.lexunit = util.ss2lu(synset)
         self.name = self.gen_lemma().name().replace("_", " ")
+        self.active_frames = []
 
     @staticmethod
     def from_name(name: str):
-        ss = wn.synset(name)
+        ss = util.get_synset(name)
         if ss is None:
             raise ValueError(f"No synset found for {name}")
         return Entity(ss)
@@ -107,7 +109,21 @@ class Entity:
         return Entity(choice)
 
     def app(self, verb:str, src=None):
-        lu = fn.lus(verb)[0]
+        verb_ss = util.get_synset(verb)
+        if verb_ss is None:
+            log.warning(f"No synset found for {verb}")
+            return False
+        lu = util.ss2lu(verb_ss)
+        if lu is None:
+            log.warning(f"No lu found for {verb}")
+            return False
+        self.active_frames.append((lu.frame))
+        return True
+
+    def describe(self):
+        print(f"{self.name} is under the following states:")
+        for frame in self.active_frames:
+            print(frame.name)
 
 def adj_from_root(synset: Synset, depth=1, weighted_by_freq=False):
     hypo = lambda s: s.hyponyms()

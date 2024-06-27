@@ -2,3 +2,4 @@
 .vscode/launch.json
 *.ipynb
 __pycache__/
+arb.log
