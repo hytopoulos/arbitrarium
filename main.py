@@ -3,12 +3,14 @@ from arb.entity import Entity
 from argparse import ArgumentParser
 import nltk
 import numpy as np
+from tkinter import *
+from tkinter import ttk
 
 def test_loop():
     entities = np.array([Entity.from_name("room")])
 
     while True:
-        inp = input(">")
+        inp = input("\n> ")
         if " " in inp:
             cmd, *args = inp.split(" ")
         else:
@@ -31,6 +33,10 @@ def test_loop():
                 print("Current entities:")
                 for e in entities:
                     print(e.name)
+            case "define":
+                possible_matches = [e for e in entities if e.name == args[0]]
+                if len(possible_matches) > 0:
+                    print(possible_matches[0].synset.definition())
             case "describe":
                 possible_matches = [e for e in entities if e.name == args[0]]
                 if len(possible_matches) > 0:
@@ -58,4 +64,7 @@ def chat():
             print(f"Did you know that a {e.name} has a {part.name}, just like a {cohyp.name} does?")
 
 if __name__ == "__main__":
+    root = Tk()
+    root.title("Arbitrarium")
+
     test_loop()
