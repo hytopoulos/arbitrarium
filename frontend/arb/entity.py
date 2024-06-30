@@ -7,19 +7,27 @@ import arb.util as util
 from arb.util import log
 
 class Entity:
+    '''
+    Stateful object/noun, defined by wordnet and framenet relations
+    '''
+
     def __init__(self, synset: Synset):
         self.synset: Synset = synset
         self.name = self.gen_lemma().name().replace("_", " ")
         self.base_frame = None
         self.frame_relations = []
+        self.active_frames = []
         self.lexunit = util.ss2lu(synset)
         if self.lexunit:
             self.base_frame = self.lexunit.frame
             self.frame_relations = list(self.inherited_frame_relations_iter(self.lexunit))
-            print(f"num. frame rels: {len(self.frame_relations)}")
+            log.info(f"num. frame rels: {len(self.frame_relations)}")
+        else:
+            pass # TODO: what if the entity isnt found in framenet?
 
     @staticmethod
     def from_name(name: str):
+        ''' Create an entity from a word, picking the most likely lemma. '''
         ss = util.get_synset(name)
         if ss is None:
             raise ValueError(f"No synset found for {name}")
@@ -32,6 +40,7 @@ class Entity:
         return Entity(np.random.choice([*hypos]))
 
     def inherited_frames_iter(self, lu):
+        ''' Iterator for all parent frames of a lexical unit '''
         frame = lu.frame
         while frame:
             parentlist = [fr for fr in frame.frameRelations if fr.type.ID == 1 and fr.Child == frame]
@@ -42,6 +51,7 @@ class Entity:
                 frame = None
 
     def inherited_frame_relations_iter(self, lu):
+        ''' Iterator of relations on this lexical unit's frame as well as its parents' '''
         for parent in self.inherited_frames_iter(lu):
             frs = [fr for fr in parent.frameRelations if fr.type.ID != 1]
             yield parent, frs
@@ -66,8 +76,7 @@ class Entity:
             permissivity < min_permissivity or len(holonyms) == 0
         ):
             m = [*synset.closure(lambda s: s.part_holonyms())]
-            if debug:
-                print(f"{fg.da_grey}{len(m)}...{synset.name()}{fg.rs}")
+            logger.info(f"{len(m)}...{synset.name()}")
             holonyms.extend(m)
             permissivity += 1
             if len(holonyms) != 0:
@@ -75,11 +84,9 @@ class Entity:
                 hypos = [*synset.hyponyms()]
                 if len(hypos) != 0 and np.random.rand() < hypo_chance:
                     synset = np.random.choice(hypos)
-                    if debug:
-                        print(f"{fg.da_grey}/{synset.name()}{fg.rs}")
+                    logger.info(f"/{synset.name()}")
             else:
-                if debug:
-                    print(f"{fg.da_grey}reached root!{fg.rs}")
+                logger.info(f"reached root!")
                 break
         return Entity(synset=synset)
     
@@ -102,8 +109,7 @@ class Entity:
             permissivity < min_permissivity or len(meronyms) == 0
         ):
             m: list[Synset] = [*synset.closure(lambda s: s.part_meronyms())]
-            if debug:
-                print(f"{fg.da_grey}{len(m)}...{synset.name()}{fg.rs}")
+            logger.info(f"{len(m)}...{synset.name()}")
             meronyms.extend(m)
             permissivity += 1
             synsets: list[Synset] = synset.hypernyms()
@@ -112,23 +118,17 @@ class Entity:
                 hypos: list[synset] = [*synset.hyponyms()]
                 if len(hypos) != 0 and np.random.rand() < hypo_chance:
                     synset = np.random.choice(hypos)
-                    if debug:
-                        print(f"{fg.da_grey}/{synset.name()}{fg.rs}")
+                    logger.info(f"/{synset.name()}")
             else:
-                if debug:
-                    print(f"{fg.da_grey}reached root!{fg.rs}")
+                logger.info(f"{fg.da_grey}reached root!")
                 break
 
-        if debug:
-            print(f"{fg.da_green}num. meronyms:\t{len(meronyms)}{fg.rs}")
+        logger.info(f"(num. meronyms:\t{len(meronyms)})")
         if len(meronyms) == 0:
             return None
 
         choice = np.random.choice(meronyms)
-        if debug:
-            print(
-                f"{fg.da_green}unweighted choice:\t{fg.da_yellow}{choice.name()}{fg.rs}"
-            )
+        logger.info(f"unweighted choice:\t{fg.da_yellow}{choice.name()}")
         return Entity(choice)
 
     def app(self, verb:str, src=None):
