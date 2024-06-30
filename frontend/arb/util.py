@@ -40,8 +40,8 @@ def wnpos2fnpos(wnpos):
         'a': 'a',
         's': 'a',
     }
-    assert wnpos in conv, f"unknown wnpos {wnpos}"
-    return conv[wnpos]
+    return conv[wnpos] if wnpos in conv else None
+
 def ss2luname(lemma):
     '''Convert a wordnet lemma to a framenet lexical unit name'''
     pos = wnpos2fnpos(lemma.synset().pos())

@@ -9,9 +9,14 @@ from arb.util import log
 class Entity:
     def __init__(self, synset: Synset):
         self.synset: Synset = synset
-        self.lexunit = util.ss2lu(synset)
         self.name = self.gen_lemma().name().replace("_", " ")
-        self.active_frames = []
+        self.base_frame = None
+        self.frame_relations = []
+        self.lexunit = util.ss2lu(synset)
+        if self.lexunit:
+            self.base_frame = self.lexunit.frame
+            self.frame_relations = list(self.inherited_frame_relations_iter(self.lexunit))
+            print(f"num. frame rels: {len(self.frame_relations)}")
 
     @staticmethod
     def from_name(name: str):
@@ -19,14 +24,31 @@ class Entity:
         if ss is None:
             raise ValueError(f"No synset found for {name}")
         return Entity(ss)
+
     @staticmethod
     def from_root(synset: Synset, depth=1, weighted_by_freq=True):
         hypo = lambda s: s.hyponyms()
         hypos = synset.closure(hypo, depth=depth)
         return Entity(np.random.choice([*hypos]))
 
+    def inherited_frames_iter(self, lu):
+        frame = lu.frame
+        while frame:
+            parentlist = [fr for fr in frame.frameRelations if fr.type.ID == 1 and fr.Child == frame]
+            if parentlist:
+                frame = parentlist[0].Parent
+                yield frame
+            else:
+                frame = None
+
+    def inherited_frame_relations_iter(self, lu):
+        for parent in self.inherited_frames_iter(lu):
+            frs = [fr for fr in parent.frameRelations if fr.type.ID != 1]
+            yield parent, frs
+
     def gen_lemma(self, weighted_by_freq: bool = True):
         return util.pick_random_lemma(self.synset, weighted_by_freq)
+    
     def gen_cohyponym(
         self,
         part,
@@ -60,6 +82,7 @@ class Entity:
                     print(f"{fg.da_grey}reached root!{fg.rs}")
                 break
         return Entity(synset=synset)
+    
     def gen_part(
         self,
         weighted_by_freq=False,

@@ -39,6 +39,11 @@ def test_loop():
                 possible_matches = [e for e in entities if e.name == args[0]]
                 if len(possible_matches) > 0:
                     possible_matches[0].describe()
+            case "framerels":
+                possible_matches = [e for e in entities if e.name == args[0]]
+                if len(possible_matches) > 0:
+                    for parent, rels in possible_matches[0].frame_relations:
+                        print(parent.name, rels)
             case "q":
                 break
             case _:
