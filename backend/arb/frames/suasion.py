@@ -25,10 +25,9 @@ class Suasion(Frame):
             log.warning(f"tried to update with no Degree")
             return False
 
-        self.degree().value = self.speaker().value
+        # Set the degree of persuasion to the degree which the speaker is justifying
+        self.degree().value = self.speaker().get_frame("Justifying", with_content=self.content()).degree()
+        # if the degree of persuasion is big enough, activate the event being persuaded
+        if self.degree().value > self.addressee().get_frame("Capability", with_event=self.content()).degree():
+            self.content().update()
         return True
-# def suasion(frame):
-#     speaker = Suasion.Speaker
-#     addressee = Suasion.Addressee
-#     Suasion.degree = speaker.Justifying[content=Suasion.Content].degree
-#     If Suasion.degree > addressee.Capability[Event=Suasion.Content].degree
