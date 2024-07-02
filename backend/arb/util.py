@@ -1,16 +1,19 @@
 import numpy as np
 from nltk.corpus import wordnet as wn
+from nltk.corpus.reader.wordnet import Synset, Lemma
 from nltk.corpus import framenet as fn
-from sty import fg, bg, ef, rs
 import logging
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, filename="arb.log", filemode="w")
 
-def get_synset(name, pos=None, weighted_by_freq=False):
-    '''Get a synset by name.
-    Default behavior is to return the most frequent lemma'''
-    synsets = wn.synsets(name, pos=pos)
+
+def get_synset(
+    name: str, pos: str | None = None, weighted_by_freq: bool = False
+) -> Synset | None:
+    """Get a synset by name.
+    Default behavior is to return the most frequent lemma"""
+    synsets: list[Synset] = wn.synsets(lemma=name, pos=pos)
     if len(synsets) == 0:
         return None
     freqs = np.array([ss_freq(ss) for ss in synsets], dtype=np.float64)
@@ -19,14 +22,15 @@ def get_synset(name, pos=None, weighted_by_freq=False):
     log.info(f"num. synsets: {len(synsets)}")
     log.info(f"freq max={max(freqs):.02f},avg={np.average(freqs):.02f}")
     if weighted_by_freq:
-        synset = np.random.choice(synsets, p=freqs/sum(freqs))
+        synset = np.random.choice(synsets, p=freqs / sum(freqs))
     else:
         synset = synsets[np.argmax(freqs)]
     return synset
 
+
 def lemma_frequencies(synset):
-    '''Get the frequencies of lemmas in a synset'''
-    lemmas = synset.lemmas()
+    """Get the frequencies of lemmas in a synset"""
+    lemmas: list[Lemma] = synset.lemmas()
     frequencies = np.array([l.count() for l in lemmas], dtype=np.float64)
     # normalize so we dont overflow on softmax
     frequencies /= max(1, frequencies.max())
@@ -34,22 +38,25 @@ def lemma_frequencies(synset):
     frequencies = np.exp(frequencies) / np.sum(np.exp(frequencies))
     return lemmas, frequencies
 
+
 def wnpos2fnpos(wnpos):
     conv = {
-        'n': 'n',
-        'v': 'v',
-        'a': 'a',
-        's': 'a',
+        "n": "n",
+        "v": "v",
+        "a": "a",
+        "s": "a",
     }
     return conv[wnpos] if wnpos in conv else None
 
+
 def ss2luname(lemma):
-    '''Convert a wordnet lemma to a framenet lexical unit name'''
+    """Convert a wordnet lemma to a framenet lexical unit name"""
     pos = wnpos2fnpos(lemma.synset().pos())
     return f"{lemma.name()}.{pos}"
 
+
 def ss2lu(synset):
-    '''Convert a wordnet synset to a framenet lexical unit'''
+    """Convert a wordnet synset to a framenet lexical unit"""
     lemmas, freqs = lemma_frequencies(synset)
     i = 1
     for freq, lemma in sorted(zip(freqs, lemmas), reverse=True):
@@ -68,14 +75,21 @@ def ss2lu(synset):
         return ss2lu(hyper[0])
     return None
 
+
 def ss_freq(synset):
-    '''Get the frequency of a synset'''
+    """Get the frequency of a synset"""
     return sum(l.count() for l in synset.lemmas())
 
-def pick_random_lemma(synset, weighted_by_freq=True):
-    '''Pick a random lemma from a synset'''
+
+def pick_random_lemma(synset, weighted_by_freq=True) -> Lemma:
+    """Pick a random lemma from a synset"""
     if weighted_by_freq:
         lemmas, p = lemma_frequencies(synset)
         return np.random.choice(lemmas, p=p)
     else:
         return np.random.choice([*synset.lemmas()])
+
+
+def get_semtype_default(id):
+    log.info(f"init {fn.semtype(id).name}")
+    return 0

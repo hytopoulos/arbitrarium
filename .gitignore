@@ -2,4 +2,6 @@
 .vscode/launch.json
 *.ipynb
 __pycache__/
+typings/
 arb.log
+node_modules/

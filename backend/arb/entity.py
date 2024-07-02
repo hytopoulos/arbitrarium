@@ -1,49 +1,45 @@
-from nltk.corpus import wordnet as wn
-from nltk.corpus import framenet as fn
-from nltk.corpus.reader.wordnet import Lemma, Synset
+from typing import Any
 import numpy as np
-from sty import fg, bg, ef, rs
+from nltk.corpus.reader.wordnet import Synset, Lemma
 import arb.util as util
 from arb.util import log
+from arb.frames import Frame, make_frame, wrap_fnframe
 
 class Entity:
-    '''
+    """
     Stateful object/noun, defined by wordnet and framenet relations
-    '''
+    """
 
     def __init__(self, synset: Synset):
         self.synset: Synset = synset
-        self.name = self.gen_lemma().name().replace("_", " ")
-        self.base_frame = None
-        self.frame_relations = []
-        self.active_frames = []
-        self.lexunit = util.ss2lu(synset)
+        self.lemma: Lemma = util.pick_random_lemma(self.synset)
+        self.name: str = self.lemma.name().replace("_", " ")
+        self.frames: list[Frame] = []
+        self.lexunit: dict[Any, Any] = util.ss2lu(synset)
         if self.lexunit:
-            self.base_frame = self.lexunit.frame
-            self.frame_relations = list(self.inherited_frame_relations_iter(self.lexunit))
-            log.info(f"num. frame rels: {len(self.frame_relations)}")
+            frame: Frame = wrap_fnframe(self.lexunit.frame)
+            self.frames.append(frame)
+            # self.frame_relations = list(self.inherited_frame_relations_iter(self.lexunit))
+            # log.info(f"num. frame rels: {len(self.frame_relations)}")
         else:
-            pass # TODO: what if the entity isnt found in framenet?
+            pass  # TODO: what if the entity isnt found in framenet?
 
-    @staticmethod
-    def from_name(name: str):
-        ''' Create an entity from a word, picking the most likely lemma. '''
-        ss = util.get_synset(name)
-        if ss is None:
-            raise ValueError(f"No synset found for {name}")
-        return Entity(ss)
-
-    @staticmethod
-    def from_root(synset: Synset, depth=1, weighted_by_freq=True):
-        hypo = lambda s: s.hyponyms()
-        hypos = synset.closure(hypo, depth=depth)
-        return Entity(np.random.choice([*hypos]))
+    def app(self, verb: str) -> bool:
+        frame: Frame | None = make_frame(verb)
+        if frame is None:
+            return False
+        self.frames.append(frame)
+        return frame.update()
 
     def inherited_frames_iter(self, lu):
-        ''' Iterator for all parent frames of a lexical unit '''
+        """Iterator for all parent frames of a lexical unit"""
         frame = lu.frame
         while frame:
-            parentlist = [fr for fr in frame.frameRelations if fr.type.ID == 1 and fr.Child == frame]
+            parentlist = [
+                fr
+                for fr in frame.frameRelations
+                if fr.type.ID == 1 and fr.Child == frame
+            ]
             if parentlist:
                 frame = parentlist[0].Parent
                 yield frame
@@ -51,14 +47,11 @@ class Entity:
                 frame = None
 
     def inherited_frame_relations_iter(self, lu):
-        ''' Iterator of relations on this lexical unit's frame as well as its parents' '''
+        """Iterator of relations on this lexical unit's frame as well as its parents'"""
         for parent in self.inherited_frames_iter(lu):
             frs = [fr for fr in parent.frameRelations if fr.type.ID != 1]
             yield parent, frs
 
-    def gen_lemma(self, weighted_by_freq: bool = True):
-        return util.pick_random_lemma(self.synset, weighted_by_freq)
-    
     def gen_cohyponym(
         self,
         part,
@@ -89,7 +82,7 @@ class Entity:
                 logger.info(f"reached root!")
                 break
         return Entity(synset=synset)
-    
+
     def gen_part(
         self,
         weighted_by_freq=False,
@@ -120,7 +113,7 @@ class Entity:
                     synset = np.random.choice(hypos)
                     logger.info(f"/{synset.name()}")
             else:
-                logger.info(f"{fg.da_grey}reached root!")
+                logger.info(f"reached root!")
                 break
 
         logger.info(f"(num. meronyms:\t{len(meronyms)})")
@@ -128,25 +121,28 @@ class Entity:
             return None
 
         choice = np.random.choice(meronyms)
-        logger.info(f"unweighted choice:\t{fg.da_yellow}{choice.name()}")
+        logger.info(f"unweighted choice:\t{choice.name()}")
         return Entity(choice)
 
-    def app(self, verb:str, src=None):
-        verb_ss = util.get_synset(verb)
-        if verb_ss is None:
-            log.warning(f"No synset found for {verb}")
-            return False
-        lu = util.ss2lu(verb_ss)
-        if lu is None:
-            log.warning(f"No lu found for {verb}")
-            return False
-        self.active_frames.append((lu.frame))
-        return True
-
     def describe(self):
-        print(f"{self.name} is under the following states:")
-        for frame in self.active_frames:
-            print(frame.name)
+        print(f"Frames for {self.name}:")
+        for frame in self.frames:
+            print(f"{frame.name}\t{frame.elements}")
+
+    @staticmethod
+    def from_name(name: str):
+        """Create an entity from a word, picking the most likely lemma."""
+        ss = util.get_synset(name)
+        if ss is None:
+            raise ValueError(f"No synset found for {name}")
+        return Entity(ss)
+
+    @staticmethod
+    def from_root(synset: Synset, depth=1, weighted_by_freq=True):
+        hypo = lambda s: s.hyponyms()
+        hypos = synset.closure(hypo, depth=depth)
+        return Entity(np.random.choice([*hypos]))
+
 
 def adj_from_root(synset: Synset, depth=1, weighted_by_freq=False):
     hypo = lambda s: s.hyponyms()
