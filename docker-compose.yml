@@ -1,0 +1,51 @@
+services:
+  postgres:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: arb
+      POSTGRES_PASSWORD: arb
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - ./postgres:/var/lib/postgresql/data
+  backend:
+    build:
+      context: backend
+    cap_drop:
+      - all
+    cap_add:
+      - setuid
+      - setgid
+      - setfcap
+    env_file:
+      - backend/docker.dev.env
+    ports:
+      - "8000:8000"
+    security_opt:
+      - apparmor=unconfined
+      - seccomp=unconfined
+    # volumes:
+    #   - ./backend:/backend
+    tmpfs:
+      # explicitly mount /dev/shm with exec as dosemu2 requires exec privilege
+      - /dev/shm:exec,uid=1000,gid=1000,size=64M,mode=0700
+      # Use a separate tmpfs to prevent a rogue jailed process
+      # from filling /tmp on the parent container
+      - /sandbox/tmp:exec,uid=1000,gid=1000,size=64M,mode=0700
+  frontend:
+    build: frontend
+    environment:
+      API_BASE: /api
+      INTERNAL_API_BASE: http://backend:8000/api
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./frontend:/frontend
+      - .env:/.env
+  nginx:
+    image: nginx:1.22-alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx:/etc/nginx/conf.d
+      - ./backend/media:/media
