@@ -12,6 +12,7 @@ numpy = "^2.0.0"
 Django = "^5.0.6"
 django-restframework = "^0.0.1"
 psycopg2-binary = "^2.9.9"
+tzdata = ^2024.1
 
 
 [build-system]
