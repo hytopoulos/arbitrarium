@@ -9,8 +9,8 @@ services:
     volumes:
       - ./postgres:/var/lib/postgresql/data
   backend:
-    build:
-      context: backend
+    build: backend
+      # context: backend
     cap_drop:
       - all
     cap_add:
@@ -24,8 +24,8 @@ services:
     security_opt:
       - apparmor=unconfined
       - seccomp=unconfined
-    # volumes:
-    #   - ./backend:/backend
+    volumes:
+      - ./backend:/backend
     tmpfs:
       # explicitly mount /dev/shm with exec as dosemu2 requires exec privilege
       - /dev/shm:exec,uid=1000,gid=1000,size=64M,mode=0700

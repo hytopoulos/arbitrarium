@@ -16,6 +16,6 @@ until nc -z ${DB_HOST} ${DB_PORT} > /dev/null; do
   sleep 1
 done
 
+poetry run /backend/manage.py makemigrations coreapp
 poetry run /backend/manage.py migrate
-
 poetry run /backend/manage.py runserver ${BE_HOST}:${BE_PORT}

@@ -14,6 +14,10 @@ RUN mkdir -p /backend \
     && useradd --create-home user \
     && chown -R user:user /backend
 
+# RUN useradd --create-home user && chown -R user:user /backend
+
+# ADD --chown=user:user . /backend
+
 # Switch to the build stage
 FROM base AS build
 
@@ -37,8 +41,6 @@ RUN apt-get update && apt-get install -y \
 
 RUN curl -sSL https://install.python-poetry.org/ | \
     POETRY_VERSION=1.8.3 POETRY_HOME=/etc/poetry python3.11 -
-
-ADD --chown=user:user . /backend
 
 WORKDIR /backend
 

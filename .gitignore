@@ -5,3 +5,7 @@ __pycache__/
 typings/
 arb.log
 node_modules/
+postgres/
+.clj-kondo/
+.lsp/
+*/virtualenvs
