@@ -7,7 +7,7 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'is_active', 'is_staff', 'is_superuser', 'date_joined']
+        fields = ['id', 'email', 'environments']
 
 
 class EnvironmentSerializer(serializers.ModelSerializer):
@@ -15,7 +15,7 @@ class EnvironmentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Environment
-        fields = ['id', 'user', 'name', 'description', 'created_at', 'updated_at']
+        fields = ['id', 'user', 'name', 'description', 'created_at', 'updated_at', 'entities']
 
 
 class EntitySerializer(serializers.ModelSerializer):
@@ -23,7 +23,7 @@ class EntitySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Entity
-        fields = ['id', 'user', 'env', 'wnid', 'fnid', 'created_at', 'updated_at']
+        fields = ['id', 'user', 'env', 'wnid', 'fnid', 'created_at', 'updated_at', 'frames']
 
 
 class FrameSerializer(serializers.ModelSerializer):
@@ -31,7 +31,7 @@ class FrameSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Frame
-        fields = ['id', 'entity', 'fnid', 'created_at', 'updated_at']
+        fields = ['id', 'entity', 'fnid', 'created_at', 'updated_at', 'elements']
 
 
 class ElementSerializer(serializers.ModelSerializer):

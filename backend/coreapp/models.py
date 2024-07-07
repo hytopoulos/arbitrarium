@@ -16,7 +16,7 @@ class User(AbstractUser):
 
 class Environment(models.Model):
     # the user I belong to
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="environments")
     # the name of the environment
     name = models.CharField(max_length=255)
     # the description of the environment
@@ -29,9 +29,9 @@ class Environment(models.Model):
 
 class Entity(models.Model):
     # the user I belong to
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="entities")
     # environment I belong to
-    env = models.ForeignKey(Environment, on_delete=models.CASCADE)
+    env = models.ForeignKey(Environment, on_delete=models.CASCADE, related_name="entities")
     # wordnet id
     wnid = models.IntegerField(null=True)
     # framenet id
@@ -44,14 +44,14 @@ class Entity(models.Model):
 
 class Frame(models.Model):
     # the entity I belong to
-    entity = models.ForeignKey(Entity, on_delete=models.CASCADE)
+    entity = models.ForeignKey(Entity, on_delete=models.CASCADE, related_name="frames")
     # framenet id
     fnid = models.IntegerField(null=True)
 
 
 class Element(models.Model):
     # the frame I belong to
-    frame = models.ForeignKey(Frame, on_delete=models.CASCADE)
+    frame = models.ForeignKey(Frame, on_delete=models.CASCADE, related_name="elements")
     # framenet id
     fnid = models.IntegerField(null=True)
     # the value

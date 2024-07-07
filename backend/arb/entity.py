@@ -135,7 +135,9 @@ class Entity:
         ss = util.get_synset(name)
         if ss is None:
             raise ValueError(f"No synset found for {name}")
-        return Entity(ss)
+        entity = Entity(ss)
+        log.info(f"Made entity wnid={entity.synset.offset()} fnid={entity.lexunit.ID}")
+        return entity
 
     @staticmethod
     def from_root(synset: Synset, depth=1, weighted_by_freq=True):
