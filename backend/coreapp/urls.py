@@ -1,17 +1,32 @@
 from django.urls import path, include
 from django.urls.resolvers import URLPattern
-
-from . import views
+from rest_framework.routers import DefaultRouter
+from .views import auth
 
 urlpatterns: list[URLPattern] = [
-    path(route='hello-world/', view=views.hello_world),
-    path(route='profile/', view=views.UserList.as_view()),
-    path(route='profile/<int:pk>/', view=views.UserDetail.as_view()),
-    path(route='env/', view=views.EnvList.as_view()),
-    path(route='env/<int:pk>', view=views.EnvDetail.as_view()),
-    path(route='ent/<int:pk>', view=views.EntityDetail.as_view()),
-    ]
-
-urlpatterns += [
-    path('api-auth/', include('rest_framework.urls')),
+    path(route='auth/', view=auth.get_csrf),
 ]
+
+## User API routes
+from .views import user
+user_router = DefaultRouter()
+user_router.register(r'profile', user.UserViewSet)
+urlpatterns += [path(route='', view=include(user_router.urls))]
+
+## Environment API routes
+from .views import environment
+environment_router = DefaultRouter()
+environment_router.register(r'env', environment.EnvViewSet)
+urlpatterns += [path(route='', view=include(environment_router.urls))]
+
+## Entity API routes
+from .views import entity
+entity_router = DefaultRouter()
+entity_router.register(r'ent', entity.EntityViewSet)
+urlpatterns += [path(route='', view=include(entity_router.urls))]
+
+## Corpus API routes
+from .views import corpus
+corpus_router = DefaultRouter()
+corpus_router.register(r'corp', corpus.CorpusViewSet, basename='corpus')
+urlpatterns += [path(route='', view=include(corpus_router.urls))]

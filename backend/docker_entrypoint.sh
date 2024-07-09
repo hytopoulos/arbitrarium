@@ -16,6 +16,8 @@ until nc -z ${DB_HOST} ${DB_PORT} > /dev/null; do
   sleep 1
 done
 
+poetry run python -m nltk.downloader wordnet
+poetry run python -m nltk.downloader framenet_v17
 poetry run /backend/manage.py makemigrations coreapp
 poetry run /backend/manage.py migrate
 poetry run /backend/manage.py runserver ${BE_HOST}:${BE_PORT}

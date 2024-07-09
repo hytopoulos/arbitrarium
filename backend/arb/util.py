@@ -8,6 +8,44 @@ log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, filename="arb.log", filemode="w")
 
 
+def query_framenet(phrase: str):
+    if not phrase.isalnum():
+        yield None
+    else:
+        yield from fn.lus(f'^{phrase}\\.n')
+
+
+def fnet_from_id(id):
+    return fn.lu(id)
+
+
+def query_noun(lemma):
+    fn_matches = {}
+
+    for lem in wn.lemmas(lemma, pos="n"):
+        lexical_distance = 0
+        ss = lem.synset()
+        while ss:
+            name = ss.name().split(".")[0]
+            matches = list(query_framenet(name))
+            matches = filter(lambda m: m and m.get('ID') not in fn_matches.keys(), matches)
+            if match := next(matches, None):
+                fn_matches[match.get("ID")] = {
+                    "fnid": match.get("ID"),
+                    "wnid": ss.offset(),
+                    "fnname": match.get("name"),
+                    "wnname": ss.name(),
+                    "lemma": lem.name(),
+                    "definition": match.get("definition"),
+                    "frequency": lem.count(),
+                    "depth": lexical_distance
+                }
+                break
+            ss = (ss.hypernyms() or [None])[0]
+            lexical_distance += 1
+    return sorted(fn_matches.values(), key=lambda m: m["depth"])
+
+
 def get_synset(
     name: str, pos: str | None = None, weighted_by_freq: bool = False
 ) -> Synset | None:

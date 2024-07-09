@@ -23,7 +23,7 @@ class EntitySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Entity
-        fields = ['id', 'user', 'env', 'wnid', 'fnid', 'created_at', 'updated_at', 'frames']
+        fields = ['id', 'user', 'env', 'name', 'wnid', 'fnid', 'created_at', 'updated_at', 'frames']
 
 
 class FrameSerializer(serializers.ModelSerializer):

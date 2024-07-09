@@ -32,6 +32,8 @@ class Entity(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="entities")
     # environment I belong to
     env = models.ForeignKey(Environment, on_delete=models.CASCADE, related_name="entities")
+    # name
+    name = models.CharField(max_length=255, default='Entity')
     # wordnet id
     wnid = models.IntegerField(null=True)
     # framenet id
@@ -40,7 +42,6 @@ class Entity(models.Model):
     created_at = models.DateTimeField(null=True, blank=True)
     # the date I was updated
     updated_at = models.DateTimeField(null=True, blank=True)
-
 
 class Frame(models.Model):
     # the entity I belong to

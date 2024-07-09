@@ -4,6 +4,7 @@ import KeyValSelectionBarItem from './KeyValSelectionBarItem.tsx';
 export interface Props {
     title: string;
     items: any;
+    selected: any;
     onItemSelected: (item: any) => void;
     display: (item: any) => string;
     k: (item: any) => any;
@@ -11,21 +12,14 @@ export interface Props {
 }
 
 export default function KeyValSelectionBar(props: Props) {
-    const [selected, setSelected] = useState(null);
-
-    const onClick = (item) => {
-        setSelected(item);
-        props.onItemSelected(item);
-    }
-
     return (
-        <div className='h-full w-full bg-slate-200'>
+        <div className='w-full bg-slate-200'>
             <p className='text-4xl'>{props.title}</p>
-            <div className='flex flex-col'>
+            <div className='flex flex-col divide-y divide-black divide-solid'>
             {props.items.map((item, _) => (
                 <KeyValSelectionBarItem
-                    onClick={() => onClick(item)}
-                    disabled={selected && props.k(selected) === props.k(item)}
+                    onClick={() => props.onItemSelected(props.v(item))}
+                    disabled={props.selected && props.k(props.selected) === props.k(item)}
                 >
                     {props.display(item)}
                 </KeyValSelectionBarItem>

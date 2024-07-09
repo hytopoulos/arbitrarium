@@ -1,47 +1,56 @@
 import React, { useEffect, useState } from 'react';
-import logo from './logo.svg';
+import axios from 'axios';
+import { QueryClient, QueryClientProvider } from 'react-query'
+import Cookies from 'universal-cookie';
 import './App.css';
 import KeyValSelectionBar from './KeyValSelectionBar.tsx';
 import GraphView from './GraphView.tsx';
+import CorpusView from './CorpusView.tsx';
+import EnvironmentsList from './EnvironmentsList.tsx';
 import EntityView from './EntityView.tsx';
 
-const elements = [
-  { data: { id: 'one', label: 'Player' }, position: { x: 0, y: 0 } },
-  { data: { id: 'two', label: 'Jury' }, position: { x: 100, y: 0 } },
-  { data: { source: 'one', target: 'two', label: 'Persuade' } }
-];
+const queryClient = new QueryClient()
+const cookies = new Cookies();
 
 function App() {
-  const [environments, setEnvironments] = useState([]);
   const [currentEnv, setCurrentEnv] = useState(null);
+  const [refresh, setRefresh] = useState(false);
 
+  // CSRF token
   useEffect(() => {
-    fetch('http://localhost:8000/api/env')
-      .then(response => response.json())
-      .then(data => setEnvironments(data))
+    axios.get('http://localhost:8000/api/auth')
+      .then(response => {
+        axios.defaults.headers.post['X-CSRFToken'] = cookies.get('csrftoken');
+        console.log(response.data);
+      })
       .catch(error => console.error(error));
-
-      console.log(environments);
   }, []);
 
+  useEffect(() => {
+    if (refresh) {
+      setRefresh(false);
+      console.log('refreshing');
+    }
+  }, [refresh]);
+
   return (
-    <main className="flex min-h-screen flex-col items-center pb-24 divide-y divide-black divide-solid">
-      <div className="text-3xl pb-3">
-        Arbitrarium - {currentEnv ? currentEnv.name : 'No environment selected'}
-      </div>
-      <div className="grid grid-flow-col z-10 w-full items-center font-mono text-sm">
-        <KeyValSelectionBar
-          title="Environments"
-          items={environments}
-          onItemSelected={setCurrentEnv}
-          display={(env) => env.name}
-          k={(env) => env.id}
-          v={(env) => env}
-        />
-        <GraphView environment={currentEnv} />
-        <EntityView />
-      </div>
-    </main>
+    <QueryClientProvider client={queryClient}>
+      <main className="flex min-h-screen flex-col items-center divide-y divide-black divide-solid">
+        <div className="fixed text-3xl pb-3 z-10">
+          Arbitrarium - {currentEnv ? currentEnv.name : 'No environment selected'}
+        </div>
+        <div className="grow grid grid-flow-col w-full items-center font-mono text-sm">
+          <EnvironmentsList className="w-1/4" onEnvSelected={setCurrentEnv} />
+          <div className="flex flex-col w-full h-full w-1/4">
+            <GraphView environment={currentEnv} />
+            <div className="flex flex-row w-full h-1/4">
+              <EntityView/>
+            </div>
+          </div>
+          <CorpusView className="w-1/4" environment={currentEnv} onAddToEnvironment={() => setRefresh(true)} />
+        </div>
+      </main>
+    </QueryClientProvider >
   );
 }
 

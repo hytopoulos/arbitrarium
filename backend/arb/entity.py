@@ -129,6 +129,7 @@ class Entity:
         for frame in self.frames:
             print(f"{frame.name}\t{frame.elements}")
 
+
     @staticmethod
     def from_name(name: str):
         """Create an entity from a word, picking the most likely lemma."""
