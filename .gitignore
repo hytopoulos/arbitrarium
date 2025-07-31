@@ -9,3 +9,4 @@ postgres/
 .clj-kondo/
 .lsp/
 */virtualenvs
+.venv/
