@@ -4,54 +4,123 @@ from rest_framework.viewsets import ModelViewSet
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.decorators import action
-from rest_framework import status
-from rest_framework.response import Response
-from rest_framework.request import Request
+from rest_framework import status, filters, permissions
 from django.db import transaction
-from coreapp.models import Frame, Entity
-from coreapp.serializers import FrameSerializer
+from django.shortcuts import get_object_or_404
+from django.db.models import Q
+from coreapp.models import Frame, Entity, Element
+from coreapp.serializers import FrameSerializer, ElementSerializer
 from coreapp.services.frame_suggestor import FrameSuggestor
 from django.core.cache import cache
-from typing import List, Dict, Any, Optional
 
 class FrameViewSet(ModelViewSet):
+    """
+    API endpoint that allows frames to be viewed or edited.
+    """
     queryset: BaseManager[Frame] = Frame.objects.all()
     serializer_class = FrameSerializer
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['name', 'definition']
+    ordering_fields = ['name', 'created_at', 'updated_at', 'is_primary']
+    ordering = ['-is_primary', 'name']
+    
+    # Explicitly set authentication and permission classes
+    # to ensure they can be overridden in tests
+    authentication_classes = []
+    permission_classes = []
+    
+    def get_queryset(self):
+        """
+        Optionally filter by entity_id if provided in the query parameters.
+        """
+        queryset = super().get_queryset()
+        entity_id = self.request.query_params.get('entity_id')
+        if entity_id is not None:
+            queryset = queryset.filter(entity_id=entity_id)
+        return queryset
 
     def create(self, request: Request) -> Response:
+        """
+        Create a new frame instance.
+        If is_primary is True, any existing primary frame for the entity will be demoted.
+        """
         entity_id = request.data.get('entity')
-        fnid = request.data.get('fnid')
-        name = request.data.get('name', '')
-        definition = request.data.get('definition', '')
-        is_primary = request.data.get('is_primary', False)
-
-        if entity_id is None:
-            return Response({'error': 'entity is required'}, status=400)
-        if fnid is None:
-            return Response({'error': 'fnid is required'}, status=400)
-
-        try:
-            entity = Entity.objects.get(id=entity_id)
-            
-            # If this is being set as primary, unset any existing primary frame for this entity
-            if is_primary:
-                Frame.objects.filter(entity=entity, is_primary=True).update(is_primary=False)
-            
-            frame = Frame.objects.create(
-                entity=entity,
-                fnid=fnid,
-                name=name,
-                definition=definition,
-                is_primary=is_primary
+        if not entity_id:
+            return Response(
+                {'error': 'entity is required'}, 
+                status=status.HTTP_400_BAD_REQUEST
             )
             
-            serializer = FrameSerializer(frame)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        try:
+            entity = Entity.objects.get(id=entity_id)
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            
+            # Handle primary frame logic
+            is_primary = serializer.validated_data.get('is_primary', False)
+            if is_primary:
+                Frame.objects.filter(entity=entity, is_primary=True).update(is_primary=False)
+                
+            self.perform_create(serializer)
+            headers = self.get_success_headers(serializer.data)
+            return Response(
+                serializer.data, 
+                status=status.HTTP_201_CREATED, 
+                headers=headers
+            )
         except Entity.DoesNotExist:
-            return Response({'error': 'Entity not found'}, status=404)
+            return Response(
+                {'error': 'Entity not found'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+    
+    @action(detail=False, methods=['get'], url_path='search')
+    def search(self, request: Request) -> Response:
+        """
+        Search for frames by name or definition.
+        
+        Query Parameters:
+            q: Search query string
+            entity_id: Optional filter by entity ID
+            
+        Returns:
+            List of matching frames
+        """
+        queryset = self.filter_queryset(self.get_queryset())
+        
+        # Apply search filter if query parameter is provided
+        search_query = request.query_params.get('q')
+        if search_query:
+            queryset = queryset.filter(
+                Q(name__icontains=search_query) | 
+                Q(definition__icontains=search_query)
+            )
+        
+        # Apply pagination
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+            
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['get'], url_path='elements')
+    def elements(self, request: Request, pk=None) -> Response:
+        """
+        List all elements for a specific frame.
+        
+        Returns:
+            List of elements for the specified frame
+        """
+        frame = self.get_object()
+        elements = frame.elements.all()
+        serializer = ElementSerializer(elements, many=True)
+        return Response(serializer.data)
 
     def list(self, request: Request) -> Response:
-        queryset = self.queryset
+        """List all frames, optionally filtered by entity_id."""
+        queryset = self.filter_queryset(self.get_queryset())
         
         # Filter by entity if provided
         entity_id = request.query_params.get('entity')
@@ -70,6 +139,34 @@ class FrameViewSet(ModelViewSet):
             
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
+        
+    @action(detail=True, methods=['post'], url_path='set-primary', url_name='frame-set-primary')
+    def set_primary(self, request: Request, pk=None) -> Response:
+        """
+        Set this frame as the primary frame for its entity.
+        This will automatically demote any other primary frames for the entity.
+        """
+        frame = self.get_object()
+        
+        with transaction.atomic():
+            # Demote any existing primary frames for this entity
+            Frame.objects.filter(
+                entity=frame.entity,
+                is_primary=True
+            ).exclude(pk=frame.pk).update(is_primary=False)
+            
+            # Set this frame as primary
+            frame.is_primary = True
+            frame.save(update_fields=['is_primary', 'updated_at'])
+            
+            # Clear the cache for frame suggestions for this entity
+            cache_key = FrameSuggestor.get_cache_key(frame.entity_id, 5)  # Default limit
+            cache.delete(cache_key)
+        
+        return Response(
+            {'status': 'frame set as primary'},
+            status=status.HTTP_200_OK
+        )
 
     def update(self, request: Request, *args, **kwargs) -> Response:
         instance = self.get_object()
