@@ -16,6 +16,11 @@ tzdata = "^2024.1"
 django-cors-headers = "^4.4.0"
 
 
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.4.1"
+pytest-django = "^4.11.1"
+pytest-mock = "^3.14.0"
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"

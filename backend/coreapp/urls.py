@@ -33,3 +33,15 @@ from .views import corpus
 corpus_router = DefaultRouter()
 corpus_router.register(r'corp', corpus.CorpusViewSet, basename='corpus')
 urlpatterns += [path(route='', view=include(corpus_router.urls))]
+
+## Frame API routes
+from .views import frame
+frame_router = DefaultRouter()
+frame_router.register(r'frame', frame.FrameViewSet, basename='frame')
+urlpatterns += [path(route='', view=include(frame_router.urls))]
+
+## Element API routes
+from .views import element
+element_router = DefaultRouter()
+element_router.register(r'element', element.ElementViewSet, basename='element')
+urlpatterns += [path(route='', view=include(element_router.urls))]
