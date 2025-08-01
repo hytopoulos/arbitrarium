@@ -149,7 +149,7 @@ export default function GraphView(props: Props) {
     };
   }, [cy, props.onEntitySelect]);
 
-  // Handle graph updates
+  // Handle graph updates - only run when environment changes
   useEffect(() => {
     if (!cy || elements.length === 0) return;
 
@@ -160,23 +160,44 @@ export default function GraphView(props: Props) {
       if (!cy || !isMounted) return;
 
       try {
+        // Get current node positions before any changes
+        const positions: Record<string, { x: number; y: number }> = {};
+        cy.nodes().forEach(node => {
+          const pos = node.position();
+          positions[node.id()] = { x: pos.x, y: pos.y };
+        });
+
         // Batch graph updates
         cy.batch(() => {
-          // @ts-ignore - Cytoscape types are not perfect
-          const currentElements = cy.elements();
+          // Get current element IDs
+          const currentIds = new Set(cy.elements().map(e => e.id()));
+          const newIds = new Set(elements.map(e => e.data.id));
           
-          // Only update if elements have changed
-          if (JSON.stringify(currentElements.map(e => e.id())) !== 
-              JSON.stringify(elements.map(e => e.data.id))) {
+          // Remove elements that are no longer in the new data
+          const toRemove = Array.from(currentIds).filter(id => !newIds.has(id));
+          if (toRemove.length > 0) {
+            cy.remove(`#${toRemove.join(', #')}`);
+          }
+          
+          // Add new elements
+          const toAdd = elements.filter(el => !currentIds.has(el.data.id));
+          if (toAdd.length > 0) {
             // @ts-ignore - Cytoscape types are not perfect
-            cy.elements().remove();
-            // @ts-ignore - Cytoscape types are not perfect
-            cy.add(elements);
+            cy.add(toAdd);
           }
         });
 
-        // Only run layout if we have elements
-        if (elements.length > 0) {
+        // Restore node positions for existing nodes
+        cy.nodes().forEach(node => {
+          const pos = positions[node.id()];
+          if (pos) {
+            node.position(pos);
+          }
+        });
+
+        // Only run layout if we don't have any positions (first load)
+        const hasPositions = Object.keys(positions).length > 0;
+        if (elements.length > 0 && !hasPositions) {
           // Cancel any running layout
           if (layout) {
             try { layout.stop(); } catch (e) {}
@@ -219,10 +240,9 @@ export default function GraphView(props: Props) {
       if (layout) {
         try { layout.stop(); } catch (e) {}
       }
-      
-      // Don't destroy the cytoscape instance here as it's managed by CytoscapeComponent
     };
-  }, [cy, elements]);
+  // Only run this effect when the environment changes, not on every render
+  }, [cy, props.environment?.[0]?.id]);
 
   // Handle component unmount
   useEffect(() => {
