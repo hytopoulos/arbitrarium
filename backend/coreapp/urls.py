@@ -4,7 +4,10 @@ from rest_framework.routers import DefaultRouter
 from .views import auth
 
 urlpatterns: list[URLPattern] = [
-    path(route='auth/', view=auth.get_csrf),
+    path('auth/csrf/', auth.get_csrf, name='get_csrf'),
+    path('auth/token/', auth.obtain_auth_token, name='obtain_token'),
+    path('auth/validate/', auth.validate_token, name='validate_token'),
+    path('auth/user/', auth.current_user, name='current_user'),  # Frontend expects this endpoint
 ]
 
 ## User API routes
@@ -16,7 +19,7 @@ urlpatterns += [path(route='', view=include(user_router.urls))]
 ## Environment API routes
 from .views import environment
 environment_router = DefaultRouter()
-environment_router.register(r'env', environment.EnvViewSet)
+environment_router.register(r'env', environment.EnvViewSet, basename='environment')
 urlpatterns += [path(route='', view=include(environment_router.urls))]
 
 ## Entity API routes

@@ -20,5 +20,14 @@ pip install -r requirements.txt
 3. Build docker image
 ```bash
 docker compose build
+```
+
+4. Run docker image
+```bash
 docker compose up
+```
+
+5. Add superuser
+```bash
+docker compose exec backend poetry run python manage.py createsuperuser
 ```
