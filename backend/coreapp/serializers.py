@@ -49,7 +49,7 @@ class EntitySerializer(serializers.ModelSerializer):
 
 
 class FrameSerializer(serializers.ModelSerializer):
-    elements = serializers.PrimaryKeyRelatedField(many=True, queryset=Element.objects.all())
+    elements = serializers.PrimaryKeyRelatedField(many=True, queryset=Element.objects.all(), required=False)
     framenet_name = serializers.SerializerMethodField(read_only=True)
 
     class Meta:

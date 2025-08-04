@@ -2,7 +2,12 @@
 const isProduction = process.env.NODE_ENV === 'production';
 
 // Base URL for all API requests
-export const API_BASE_URL = isProduction ? '/api' : 'http://localhost:8000/api';
+// Use REACT_APP_API_BASE if available (set in docker-compose), otherwise fallback to default
+export const API_BASE_URL = process.env.REACT_APP_API_BASE || 
+  (isProduction ? '/api' : 
+    (process.env.NODE_ENV === 'development' && process.env.REACT_APP_INTERNAL_API_BASE ? 
+      process.env.REACT_APP_INTERNAL_API_BASE : 
+      'http://localhost:8000/api'));
 
 interface ApiConfig extends RequestInit {
   headers?: Record<string, string>;
@@ -10,8 +15,19 @@ interface ApiConfig extends RequestInit {
 
 // Helper function to get CSRF token
 export const getCSRFToken = (): string | null => {
+  // Try to get CSRF token from cookie
   const match = document.cookie.match(/csrftoken=([^;]+)/);
-  return match ? match[1] : null;
+  if (match) {
+    return match[1];
+  }
+  
+  // Also try with different cookie name patterns
+  const csrftokenMatch = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
+  if (csrftokenMatch) {
+    return csrftokenMatch[1];
+  }
+  
+  return null;
 };
 
 // Set CSRF token for the session
@@ -22,8 +38,11 @@ export const setCSRFToken = async (): Promise<string | null> => {
     });
     
     if (response.ok) {
+      // Wait a bit for cookie to be set
+      await new Promise(resolve => setTimeout(resolve, 100));
       return getCSRFToken();
     }
+    console.error('Failed to get CSRF token - response not OK:', response.status);
     return null;
   } catch (error) {
     console.error('Error setting CSRF token:', error);
@@ -54,7 +73,9 @@ export const api = {
       ...(config.headers || {})
     };
 
-    const response = await fetch(`${API_BASE_URL}${url}`, {
+    // Ensure proper URL construction with a slash between base URL and endpoint
+    const fullUrl = url.startsWith('/') ? `${API_BASE_URL}${url}` : `${API_BASE_URL}/${url}`;
+    const response = await fetch(fullUrl, {
       ...config,
       method: 'GET',
       headers,
@@ -82,7 +103,9 @@ export const api = {
       ...(config.headers || {})
     };
 
-    const response = await fetch(`${API_BASE_URL}${url}`, {
+    // Ensure proper URL construction with a slash between base URL and endpoint
+    const fullUrl = url.startsWith('/') ? `${API_BASE_URL}${url}` : `${API_BASE_URL}/${url}`;
+    const response = await fetch(fullUrl, {
       ...config,
       method: 'POST',
       headers,

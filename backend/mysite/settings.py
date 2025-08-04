@@ -43,6 +43,8 @@ if DEBUG:
     # Development-specific settings
     CSRF_COOKIE_SECURE = False
     SESSION_COOKIE_SECURE = False
+    CSRF_COOKIE_HTTPONLY = False
+    CSRF_COOKIE_SAMESITE = 'Lax'
 
 # Trusted origins for CSRF
 CSRF_TRUSTED_ORIGINS = [

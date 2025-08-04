@@ -47,6 +47,7 @@
       "last 1 safari version"
     ]
   },
+  "proxy": "http://backend:8000",
   "devDependencies": {
     "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
     "@types/cytoscape": "^3.21.9",

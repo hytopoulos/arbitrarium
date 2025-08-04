@@ -19,7 +19,7 @@ export interface Entity {
 }
 
 export interface Frame {
-  id: string;
+  id: number;
   name?: string;  // Made optional since we're using frame_type
   frame_type: string;  // Required field for frame type
   definition?: string;
@@ -38,6 +38,7 @@ export interface Element {
   core_type?: string;
   frame?: string | number;
   value?: any;
+  fnid?: string | number;
   created_at?: string;
   updated_at?: string;
 }

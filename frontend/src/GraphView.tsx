@@ -5,6 +5,7 @@ import type { Core, EventObject, NodeSingular, EdgeSingular, ElementDefinition, 
 import coseBilkent from 'cytoscape-cose-bilkent';
 import { Environment, Entity } from './types';
 import './types/cytoscape-extensions.d';
+import { API_BASE_URL } from './api/config';
 
 // Using dynamic import to bypass TypeScript errors with react-cytoscapejs v2.0.0
 const CytoscapeComponent = require('react-cytoscapejs').default as React.ComponentType<{
@@ -94,7 +95,7 @@ export default function GraphView(props: Props) {
     console.log('Fetching entities for environment:', envId);
     
     try {
-      const response = await fetch(`http://localhost:8000/api/ent/?env=${envId}`, {
+      const response = await fetch(`${API_BASE_URL}/ent/?env=${envId}`, {
         headers: {
           'Authorization': `Token ${localStorage.getItem('token')}`,
           'Content-Type': 'application/json',

@@ -36,59 +36,83 @@ class FrameViewSet(viewsets.ModelViewSet):
         """
         Create a frame with validation for required core elements.
         """
+        # Log the request data for debugging
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"Frame creation request data: {request.data}")
+        
         # Get frame type from request data
         frame_type = request.data.get('frame_type')
         if not frame_type:
             frame_type = request.data.get('name')
+            logger.info(f"Using 'name' as frame_type: {frame_type}")
+        
+        logger.info(f"Frame type for validation: {frame_type}")
         
         # If we have a frame type, validate required core elements
         if frame_type:
             try:
                 # Get required core elements for this frame type
+                logger.info(f"Fetching frame data for: {frame_type}")
                 frame = framenet_service.get_frame_by_name(frame_type)
                 if frame:
                     required_elements = [
                         element.name for element in frame.elements 
                         if element.core_type in ['Core', 'Core-Unexpressed']
                     ]
+                    logger.info(f"Required core elements for {frame_type}: {required_elements}")
                     
                     # Check if elements data is provided
                     elements_data = request.data.get('elements', [])
+                    logger.info(f"Elements data provided: {elements_data}")
                     
                     # Extract element names from provided data
                     provided_element_names = [
                         element.get('name') for element in elements_data 
                         if element.get('name')
                     ]
+                    logger.info(f"Provided element names: {provided_element_names}")
                     
                     # Check if all required elements are provided
                     missing_elements = [
                         element for element in required_elements 
                         if element not in provided_element_names
                     ]
+                    logger.info(f"Missing elements: {missing_elements}")
                     
                     if missing_elements:
+                        error_message = f"Missing required core elements for frame type '{frame_type}'. Required: {required_elements}, Provided: {provided_element_names}, Missing: {missing_elements}"
+                        logger.warning(error_message)
                         return Response(
                             {
                                 'error': 'Missing required core elements',
                                 'missing_elements': missing_elements,
-                                'required_elements': required_elements
+                                'required_elements': required_elements,
+                                'provided_elements': provided_element_names,
+                                'message': error_message
                             },
                             status=status.HTTP_400_BAD_REQUEST
                         )
+                else:
+                    logger.warning(f"Frame not found for frame type: {frame_type}")
             except FrameNetError as e:
                 # Log the error but don't fail frame creation
-                import logging
                 logger = logging.getLogger(__name__)
-                logger.warning(f"Could not validate core elements for frame type {frame_type}: {str(e)}")
+                logger.warning(f"Could not validate core elements for frame type {frame_type}: {str(e)}", exc_info=True)
             except Exception as e:
                 # Log the error but don't fail frame creation
-                import logging
                 logger = logging.getLogger(__name__)
-                logger.warning(f"Unexpected error validating core elements for frame type {frame_type}: {str(e)}")
+                logger.warning(f"Unexpected error validating core elements for frame type {frame_type}: {str(e)}", exc_info=True)
         
         # Continue with normal creation process
-        return super().create(request, *args, **kwargs)
+        logger.info("Proceeding with normal frame creation process")
+        try:
+            result = super().create(request, *args, **kwargs)
+            logger.info(f"Frame created successfully: {result.data if hasattr(result, 'data') else 'No data'}")
+            return result
+        except Exception as e:
+            logger.error(f"Error during frame creation: {str(e)}", exc_info=True)
+            raise
 
     def perform_create(self, serializer):
         """
@@ -122,6 +146,21 @@ class ElementViewSet(viewsets.ModelViewSet):
     search_fields = ['name', 'definition', 'value']
     ordering_fields = ['name', 'core_type', 'created_at', 'updated_at']
     ordering = ['core_type', 'name']
+
+    def create(self, request, *args, **kwargs):
+        """
+        Create an element with detailed error logging.
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"Element creation request data: {request.data}")
+        
+        serializer = self.get_serializer(data=request.data)
+        if not serializer.is_valid():
+            logger.error(f"Element serializer validation errors: {serializer.errors}")
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        return super().create(request, *args, **kwargs)
 
     def get_queryset(self):
         """
@@ -262,13 +301,63 @@ class FrameNetViewSet(viewsets.ViewSet):
             for element in frame.elements:
                 element_data = {
                     'id': element.id,
-                    'name': element.name.name if hasattr(element, 'name') and hasattr(element.name, 'name') else str(getattr(element, 'name', '')),
-                    'core_type': element.name.core_type.lower() if hasattr(element, 'name') and hasattr(element.name, 'core_type') else getattr(element, 'core_type', '').lower(),
-                    'definition': element.name.definition if hasattr(element, 'name') and hasattr(element.name, 'definition') else getattr(element, 'definition', '')
+                    'name': element.name,
+                    'core_type': element.core_type.lower(),
+                    'definition': element.definition,
+                    'fnid': element.name  # Use the element name as the FrameNet ID
                 }
                 elements_data.append(element_data)
             
             return Response({
+                'frame_type': frame.name,
+                'elements': elements_data
+            })
+            
+        except FrameNetError as e:
+            return Response(
+                {'error': f'FrameNet service error: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+            
+    @action(detail=True, methods=['get'], url_path='elements')
+    def frame_elements(self, request, pk=None):
+        """
+        Get frame elements for a specific frame by its ID.
+        """
+        try:
+            # Get the frame from the database
+            frame = self.get_object()
+            
+            # Get the frame type from the frame
+            frame_type = frame.frame_type
+            if not frame_type:
+                return Response(
+                    {'error': 'Frame does not have a valid frame type'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Get the frame elements from FrameNet
+            frame = framenet_service.get_frame_by_name(frame_type)
+            if not frame:
+                return Response(
+                    {'error': f'Frame type "{frame_type}" not found in FrameNet'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Return frame elements with flat structure
+            elements_data = []
+            for element in frame.elements:
+                element_data = {
+                    'id': element.id,
+                    'name': element.name,
+                    'core_type': element.core_type.lower(),
+                    'definition': element.definition,
+                    'fnid': element.name  # Use the element name as the FrameNet ID
+                }
+                elements_data.append(element_data)
+            
+            return Response({
+                'frame_id': int(pk),
                 'frame_type': frame.name,
                 'elements': elements_data
             })

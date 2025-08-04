@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { Entity, Frame, Element } from './types';
-import { getFramesForEntity, createFrame, setPrimaryFrame, getFrameTypes, FrameType, getFrameElements, FrameElement, createElement } from './api/frameApi';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Entity, Frame } from './types';
+import { getFramesForEntity, createFrame, createElement, setPrimaryFrame, getFrameTypes, FrameType, getFrameElements, FrameElement } from './api/frameApi';
 
 interface EntityViewProps {
   entity: Entity | null;
@@ -21,6 +21,22 @@ export default function EntityView({ entity }: EntityViewProps) {
   const [isLoadingFrameElements, setIsLoadingFrameElements] = useState(false);
   const [frameElementsError, setFrameElementsError] = useState<string | null>(null);
   
+  const loadFrames = useCallback(async () => {
+    if (!entity?.id) return;
+    
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await getFramesForEntity(entity.id);
+      setFrames(data);
+    } catch (err) {
+      console.error('Failed to load frames:', err);
+      setError('Failed to load frames. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [entity?.id]);
+
   // Load frame types on component mount
   useEffect(() => {
     const loadFrameTypes = async () => {
@@ -28,11 +44,14 @@ export default function EntityView({ entity }: EntityViewProps) {
       setFrameTypesError(null);
       try {
         const types = await getFrameTypes();
+        console.log('Frame types loaded:', types);
+        console.log('Frame types length:', types.length);
         setFrameTypes(types);
       } catch (error) {
         console.error('Failed to load frame types:', error);
         setFrameTypesError('Failed to load frame types. Please try again later.');
       } finally {
+        console.log('Finished loading frame types');
         setIsLoadingFrameTypes(false);
       }
     };
@@ -87,23 +106,7 @@ export default function EntityView({ entity }: EntityViewProps) {
     if (entity?.id) {
       loadFrames();
     }
-  }, [entity?.id]);
-  
-  const loadFrames = async () => {
-    if (!entity?.id) return;
-    
-    setIsLoading(true);
-    setError(null);
-    try {
-      const data = await getFramesForEntity(entity.id);
-      setFrames(data);
-    } catch (err) {
-      console.error('Failed to load frames:', err);
-      setError('Failed to load frames. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  }, [entity?.id, loadFrames]);
 
   const handleAddFrame = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -113,16 +116,41 @@ export default function EntityView({ entity }: EntityViewProps) {
     setError(null);
     
     try {
-      const newFrame = await createFrame({
+      // First, create the frame without elements
+      // Explicitly exclude elements field to avoid backend validation issues
+      const frameCreationData = {
         entity: entity.id,
         name: newFrameName,
         frame_type: newFrameType,
-        definition: newFrameDefinition || undefined,
-        is_primary: frames.length === 0, // Set as primary if it's the first frame
-      });
+        definition: newFrameDefinition
+      };
       
-      // Add the new frame to the list
-      setFrames([...frames, newFrame]);
+      const newFrame = await createFrame(frameCreationData);
+      
+      // Then, create elements for the frame if any are provided
+      const elementPromises = Object.entries(selectedElements)
+        .filter(([name, value]) => value.trim() !== '')
+        .map(([name, value]) => {
+          // Find the corresponding frame element to get the fnid
+          const frameElement = frameElements.find(el => el.name === name);
+          return createElement({
+            name,
+            value,
+            frame: newFrame.id,
+            fnid: frameElement?.fnid || frameElement?.id // Use fnid if available, otherwise fall back to id
+          });
+        });
+      
+      if (elementPromises.length > 0) {
+        await Promise.all(elementPromises);
+        
+        // Reload the frame to get updated elements
+        const updatedFrames = await getFramesForEntity(entity.id);
+        setFrames(updatedFrames);
+      } else {
+        // Add the new frame to the list
+        setFrames(prev => [...prev, newFrame]);
+      }
       
       // Reset form
       setNewFrameName('');
@@ -130,9 +158,11 @@ export default function EntityView({ entity }: EntityViewProps) {
       setNewFrameType('');
       setSelectedElements({});
       
+      // Show success message
+      alert('Frame added successfully!');
     } catch (err) {
-      console.error('Failed to create frame:', err);
-      setError('Failed to create frame. Please try again.');
+      console.error('Failed to add frame:', err);
+      setError(err instanceof Error ? err.message : 'Failed to add frame. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -149,7 +179,7 @@ export default function EntityView({ entity }: EntityViewProps) {
       // Update local state to reflect the new primary frame
       setFrames(frames.map(frame => ({
         ...frame,
-        is_primary: frame.id === frameId,
+        is_primary: frame.id.toString() === frameId,
       })));
     } catch (err) {
       console.error('Failed to set primary frame:', err);
@@ -248,7 +278,7 @@ export default function EntityView({ entity }: EntityViewProps) {
   };
 
   return (
-    <div className="px-4 py-4 h-full w-full bg-slate-100 overflow-auto">
+    <div className="px-4 py-4 h-full w-full bg-slate-100 overflow-visible">
       {/* Entity Header */}
       <div className="pb-4 border-b border-gray-200">
         <h2 className="text-xl font-bold text-gray-800">{entity.name || 'Unnamed Entity'}</h2>
@@ -306,7 +336,7 @@ export default function EntityView({ entity }: EntityViewProps) {
                     <div className="flex space-x-2">
                       {!frame.is_primary && (
                         <button
-                          onClick={() => handleSetPrimary(frame.id)}
+                          onClick={() => handleSetPrimary(frame.id.toString())}
                           className="text-xs px-2 py-1 bg-white border border-gray-300 rounded text-gray-700 hover:bg-gray-50"
                           disabled={isLoading}
                         >
@@ -353,10 +383,14 @@ export default function EntityView({ entity }: EntityViewProps) {
                 <select
                   id="frameType"
                   value={newFrameType}
-                  onChange={(e) => setNewFrameType(e.target.value)}
+                  onChange={(e) => {
+                    console.log('Frame type changed to:', e.target.value);
+                    setNewFrameType(e.target.value);
+                  }}
                   className="p-2 border rounded w-full"
                   required
-                  disabled={isLoading || frameTypes.length === 0}
+                  disabled={isLoadingFrameTypes || frameTypes.length === 0}
+                  onClick={() => console.log('Dropdown clicked', { isLoadingFrameTypes, frameTypesLength: frameTypes.length })}
                 >
                   <option value="">Select a frame type</option>
                   {frameTypes.map((type) => (

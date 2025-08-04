@@ -83,10 +83,10 @@ def obtain_auth_token(request: Request) -> Response:
         user_environment = Environment.objects.filter(user=user).first()
         if not user_environment:
             try:
-                # Try to create a default environment for the user
+                # Try to create a default environment for the user with a unique name
                 user_environment = Environment.objects.create(
                     user=user,
-                    name='Default Environment',
+                    name=f'Default Environment for {user.email}',
                     description='Automatically created default environment',
                     created_at=timezone.now(),
                     updated_at=timezone.now()

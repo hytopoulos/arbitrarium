@@ -64,10 +64,16 @@ const UserLogin: React.FC<UserLoginProps> = ({ onSuccess, onError, onSwitchToSig
       console.log('Attempting login with email:', formData.email);
       
       // First, ensure we have a CSRF token
+      console.log('Attempting to set CSRF token...');
       const csrfToken = await setCSRFToken();
+      console.log('CSRF token result:', csrfToken);
+      
       if (!csrfToken) {
+        // Let's check what cookies we have
+        console.log('Available cookies:', document.cookie);
         throw new Error('Failed to get CSRF token');
       }
+      console.log('Successfully obtained CSRF token');
       
       // Make the login request using the configured api instance
       const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000/api'}/auth/token/`, {
@@ -124,7 +130,10 @@ const UserLogin: React.FC<UserLoginProps> = ({ onSuccess, onError, onSwitchToSig
       
       let errorMessage = 'Login failed. Please try again.';
       
-      if (error.response) {
+      // Handle CSRF token specific errors
+      if (error.message && error.message.includes('Failed to get CSRF token')) {
+        errorMessage = 'Unable to retrieve security token. Please refresh the page and try again.';
+      } else if (error.response) {
         // The request was made and the server responded with a status code
         // that falls out of the range of 2xx
         const errorData = await error.response.json().catch(() => ({}));

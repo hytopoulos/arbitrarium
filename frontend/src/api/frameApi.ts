@@ -17,6 +17,7 @@ export interface FrameElement {
   name: string;
   core_type: string;
   definition: string;
+  fnid?: number;
 }
 
 export interface FrameElementsResponse {
@@ -235,12 +236,95 @@ export const getFrameElements = async (frameType: string): Promise<FrameElements
  * Creates a new element for a frame
  */
 export const createElement = async (elementData: Partial<Element>): Promise<Element> => {
-  const response = await api.post('/element/', elementData);
-  
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    throw new Error(error.detail || 'Failed to create element');
+  try {
+    const response = await api.post('/element/', elementData);
+    
+    const result = await response.json();
+    console.log('Successfully created element:', result);
+    return result;
+  } catch (error) {
+    console.error('Error in createElement:', error);
+    throw error;
   }
-  
-  return response.json();
+};
+
+/**
+ * Fetches a specific frame by ID
+ */
+export const getFrameById = async (frameId: number): Promise<Frame> => {
+  try {
+    const response = await api.get(`/frame/${frameId}/`);
+    
+    if (!response.ok) {
+      let errorData;
+      try {
+        errorData = await response.json();
+      } catch (e) {
+        console.error('Failed to parse error response:', e);
+      }
+      
+      const errorMessage = errorData?.detail || `HTTP error! status: ${response.status}`;
+      console.error('Failed to fetch frame:', {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorMessage,
+      });
+      throw new Error(`Failed to fetch frame: ${errorMessage}`);
+    }
+    
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error in getFrameById:', error);
+    throw error;
+  }
+};
+
+/**
+ * Fetches elements for a specific frame by ID
+ */
+export const getFrameElementsById = async (frameId: number): Promise<FrameElement[]> => {
+  try {
+    console.log(`Fetching elements for frame ID: ${frameId}`);
+    const response = await api.get(`/frame/${frameId}/elements/`);
+    
+    if (!response.ok) {
+      let errorData;
+      try {
+        errorData = await response.json();
+      } catch (e) {
+        console.error('Failed to parse error response:', e);
+      }
+      
+      const errorMessage = errorData?.detail || `HTTP error! status: ${response.status}`;
+      console.error('Failed to fetch frame elements:', {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorMessage,
+        frameId,
+      });
+      throw new Error(`Failed to fetch frame elements: ${errorMessage}`);
+    }
+    
+    const data = await response.json();
+    console.log(`Received frame elements for frame ID ${frameId}:`, data);
+    
+    // Ensure the response has the expected structure
+    if (data && data.elements && Array.isArray(data.elements)) {
+      return data.elements;
+    } else if (Array.isArray(data)) {
+      // Handle case where the endpoint returns the array directly
+      return data;
+    } else {
+      console.error('Unexpected response format for frame elements:', data);
+      throw new Error('Unexpected response format for frame elements');
+    }
+  } catch (error) {
+    console.error('Error in getFrameElementsById:', {
+      error,
+      frameId,
+      message: error instanceof Error ? error.message : 'Unknown error',
+    });
+    throw error;
+  }
 };
