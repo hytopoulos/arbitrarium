@@ -25,21 +25,43 @@ interface GraphData {
   links: GraphLink[];
 }
 
+export interface FrameElementAssignment {
+  frameId: string;
+  elementId: string;
+  role?: string;
+}
+
 interface Props {
   environment?: Environment[];
   onEntitySelect?: (entity: Entity | null) => void;
+  onFrameElementAssign?: (assignment: FrameElementAssignment) => Promise<void>;
   className?: string;
 }
 
-const GraphViewD3: React.FC<Props> = ({ environment, onEntitySelect, className = '' }) => {
+const GraphViewD3: React.FC<Props> = ({ 
+  environment, 
+  onEntitySelect, 
+  onFrameElementAssign,
+  className = '' 
+}) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isDraggingLink, setIsDraggingLink] = useState(false);
+  const [dragStartNode, setDragStartNode] = useState<GraphNode | null>(null);
+  const [dragEndPos, setDragEndPos] = useState<{x: number, y: number} | null>(null);
+  const [showAssignmentDialog, setShowAssignmentDialog] = useState(false);
+  const [assignmentData, setAssignmentData] = useState<{
+    frameId: string;
+    elementId: string;
+  } | null>(null);
+  
   const simulationRef = useRef<Simulation<GraphNode, GraphLink> | null>(null);
   const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
+  const linkLineRef = useRef<SVGLineElement | null>(null);
   
   // Update dimensions when container size changes
   useEffect(() => {
@@ -150,17 +172,11 @@ const GraphViewD3: React.FC<Props> = ({ environment, onEntitySelect, className =
     const currentSimulation = simulationRef.current;
     if (currentSimulation) {
       currentSimulation.stop();
-      simulationRef.current = null;
     }
     
     if (!graphData.nodes.length) return;
     
     const { width, height } = dimensions;
-    
-    // Clear previous simulation
-    if (simulationRef.current) {
-      simulationRef.current.stop();
-    }
     
     // Calculate the ideal link distance based on number of nodes
     const nodeCount = graphData.nodes.length;
@@ -303,10 +319,23 @@ const GraphViewD3: React.FC<Props> = ({ environment, onEntitySelect, className =
       }
     });
     
+    // Create temporary link line for drag operations
+    const linkGroup = svg.append('g').attr('class', 'links');
+    
+    // Create the temporary drag line
+    const tempLink = linkGroup.append('line')
+      .attr('class', 'temp-link')
+      .style('display', 'none')
+      .attr('stroke', '#999')
+      .attr('stroke-dasharray', '5,5')
+      .attr('stroke-width', 2);
+    
+    // Store reference to the line element
+    linkLineRef.current = tempLink.node();
+    
     // Create links with selection state
-    const link = svg.append('g')
-      .attr('class', 'links')
-      .selectAll('line')
+    const link = linkGroup
+      .selectAll<SVGLineElement, GraphLink>('line:not(.temp-link)')
       .data(graphData.links)
       .join('line')
       .attr('stroke', (d: GraphLink) => {
@@ -356,7 +385,81 @@ const GraphViewD3: React.FC<Props> = ({ environment, onEntitySelect, className =
       .on('mouseout', function(d) {
         d3.select(this).attr('r', d === selectedNode ? 12 : 10);
       })
+      .on('mousedown', function(event: MouseEvent, d: GraphNode) {
+        // Only handle left mouse button with Ctrl key
+        if (event.button !== 0 || !event.ctrlKey) return;
+        
+        event.preventDefault();
+        event.stopPropagation();
+        
+        if (isDraggingLink) return;
+        
+        setIsDraggingLink(true);
+        setDragStartNode(d);
+        
+        // Show the temporary link line
+        d3.select(linkLineRef.current)
+          .style('display', 'block')
+          .attr('x1', d.x || 0)
+          .attr('y1', d.y || 0)
+          .attr('x2', d.x || 0)
+          .attr('y2', d.y || 0);
+        
+        // Handle mouse move on document to track the drag
+        const handleMouseMove = (e: MouseEvent) => {
+          if (!isDraggingLink || !linkLineRef.current) return;
+          
+          // Get mouse position relative to SVG
+          const pt = svg.node()!.createSVGPoint();
+          pt.x = e.clientX;
+          pt.y = e.clientY;
+          const svgP = pt.matrixTransform(svg.node()!.getScreenCTM()!.inverse());
+          
+          // Update end position of the line
+          d3.select(linkLineRef.current)
+            .attr('x2', svgP.x)
+            .attr('y2', svgP.y);
+            
+          setDragEndPos({ x: svgP.x, y: svgP.y });
+        };
+        
+        // Handle mouse up to complete the drag
+        const handleMouseUp = (e: MouseEvent) => {
+          if (!isDraggingLink) return;
+          
+          // Hide the temporary link line
+          d3.select(linkLineRef.current).style('display', 'none');
+          
+          // Find if we're over a node
+          const targetNode = graphData.nodes.find(node => {
+            const dx = (node.x || 0) - (dragEndPos?.x || 0);
+            const dy = (node.y || 0) - (dragEndPos?.y || 0);
+            return Math.sqrt(dx * dx + dy * dy) < 20; // 20px hit radius
+          });
+          
+          // If dropped on a different node, show assignment dialog
+          if (targetNode && targetNode.id !== d.id) {
+            setAssignmentData({
+              frameId: d.id,
+              elementId: targetNode.id
+            });
+            setShowAssignmentDialog(true);
+          }
+          
+          // Clean up
+          setIsDraggingLink(false);
+          setDragStartNode(null);
+          setDragEndPos(null);
+          document.removeEventListener('mousemove', handleMouseMove);
+          document.removeEventListener('mouseup', handleMouseUp);
+        };
+        
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('mouseup', handleMouseUp, { once: true });
+      })
       .on('click', function(event: MouseEvent, d: GraphNode) {
+        // Skip if this is a ctrl+click (we handle that in mousedown)
+        if (event.ctrlKey) return;
         event.stopPropagation();
         const newSelectedNode = d === selectedNode ? null : d;
         setSelectedNode(newSelectedNode);
@@ -430,7 +533,7 @@ const GraphViewD3: React.FC<Props> = ({ environment, onEntitySelect, className =
       node.attr('transform', (d: GraphNode) => `translate(${d.x},${d.y})`);
     });
     
-    // Handle window resize
+    // Handle window resize with debounce
     const handleResize = () => {
       if (!svgRef.current) return;
       
@@ -438,12 +541,27 @@ const GraphViewD3: React.FC<Props> = ({ environment, onEntitySelect, className =
       if (!container) return;
       
       const { width, height } = container.getBoundingClientRect();
-      setDimensions({ width, height });
+      
+      // Only update if dimensions actually changed
+      if (Math.abs(width - dimensions.width) > 10 || Math.abs(height - dimensions.height) > 10) {
+        setDimensions({ width, height });
+      }
+      
+      // Update simulation center without causing re-render
       simulation.force('center', d3.forceCenter(width / 2, height / 2));
       simulation.alpha(0.3).restart();
     };
     
-    window.addEventListener('resize', handleResize);
+    // Debounce resize handler
+    let resizeTimer: NodeJS.Timeout;
+    const debouncedResize = () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(handleResize, 100);
+    };
+    
+    window.addEventListener('resize', debouncedResize);
+    
+    // Initial setup
     handleResize();
     
     // Store simulation reference
@@ -451,10 +569,14 @@ const GraphViewD3: React.FC<Props> = ({ environment, onEntitySelect, className =
     
     // Cleanup
     return () => {
-      window.removeEventListener('resize', handleResize);
-      simulation.stop();
+      window.removeEventListener('resize', debouncedResize);
+      if (simulationRef.current) {
+        simulationRef.current.stop();
+      }
+      clearTimeout(resizeTimer);
     };
-  }, [graphData, dimensions, selectedNode, onEntitySelect]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [graphData.nodes.length]); // Only re-run when graph data changes
   
   // Improved drag behavior with better click handling
   const drag = (simulation: Simulation<GraphNode, GraphLink>) => {
@@ -586,6 +708,23 @@ const GraphViewD3: React.FC<Props> = ({ environment, onEntitySelect, className =
     );
   }
 
+  // Handle frame element assignment
+  const handleAssignFrameElement = async (role: string) => {
+    if (!assignmentData || !onFrameElementAssign) return;
+    
+    try {
+      await onFrameElementAssign({
+        ...assignmentData,
+        role
+      });
+    } catch (error) {
+      console.error('Failed to assign frame element:', error);
+    } finally {
+      setShowAssignmentDialog(false);
+      setAssignmentData(null);
+    }
+  };
+
   return (
     <div ref={containerRef} className={`w-full h-full relative ${className}`}>
       <svg
@@ -593,20 +732,71 @@ const GraphViewD3: React.FC<Props> = ({ environment, onEntitySelect, className =
         width="100%"
         height="100%"
         className="block"
-      />
-      <defs>
-        <marker 
-          id="arrowhead"
-          markerWidth="10"
-          markerHeight="7"
-          refX="9"
-          refY="3.5"
-          orient="auto"
-          markerUnits="strokeWidth"
-        >
-          <polygon points="0 0, 10 3.5, 0 7" fill="#999" />
-        </marker>
-      </defs>
+        style={{
+          cursor: isDraggingLink ? 'crosshair' : 'grab',
+          userSelect: 'none'
+        }}
+      >
+        <defs>
+          <marker 
+            id="arrowhead"
+            markerWidth="10"
+            markerHeight="7"
+            refX="9"
+            refY="3.5"
+            orient="auto"
+            markerUnits="strokeWidth"
+          >
+            <polygon points="0 0, 10 3.5, 0 7" fill="#999" />
+          </marker>
+        </defs>
+      </svg>
+      
+      {/* Frame Element Assignment Dialog */}
+      {showAssignmentDialog && assignmentData && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+          <div className="bg-white p-6 rounded-lg shadow-xl w-96">
+            <h3 className="text-lg font-medium mb-4">Assign as Frame Element</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Role in Frame
+                </label>
+                <input
+                  type="text"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Enter role (e.g., 'agent', 'patient')"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && e.currentTarget.value.trim()) {
+                      handleAssignFrameElement(e.currentTarget.value.trim());
+                    }
+                  }}
+                  autoFocus
+                />
+              </div>
+              <div className="flex justify-end space-x-2">
+                <button
+                  onClick={() => setShowAssignmentDialog(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-md"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    const input = document.querySelector('input[type="text"]') as HTMLInputElement;
+                    if (input?.value.trim()) {
+                      handleAssignFrameElement(input.value.trim());
+                    }
+                  }}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md"
+                >
+                  Assign
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
