@@ -1,10 +1,13 @@
+import logging
 from typing import Optional
 from django.db.models.manager import BaseManager
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.request import Request
 from rest_framework.response import Response
-from coreapp.models import Entity, Environment
+from coreapp.models import Entity, Environment, Frame
 from coreapp.serializers import EntitySerializer
+
+logger = logging.getLogger(__name__)
 
 class EntityViewSet(ModelViewSet):
     queryset: BaseManager[Entity] = Entity.objects.all()
@@ -25,11 +28,30 @@ class EntityViewSet(ModelViewSet):
         if env is None:
             return Response({'error': 'env is required'}, status=400)
 
-        envInstance = Environment.objects.get(id=env)
-        userInstance = envInstance.user
-        entity: Entity = Entity.objects.create(name=name, wnid=wnid, fnid=fnid, env=envInstance, user=userInstance)
+        env_instance = Environment.objects.get(id=env)
+        user_instance = env_instance.user
+        
+        # Create the entity
+        entity = Entity.objects.create(
+            name=name, 
+            wnid=wnid, 
+            fnid=fnid, 
+            env=env_instance, 
+            user=user_instance
+        )
+        
+        # Create a frame for the entity using its FrameNet ID
+        from coreapp.models import Frame
+        try:
+            # This will automatically create the frame and set up parent relationships
+            frame = Frame.from_framenet(entity=entity, fnid=fnid, is_primary=True)
+            logger.info(f"Created frame {frame.name} (ID: {frame.id}) for entity {entity.id}")
+        except Exception as e:
+            logger.error(f"Failed to create frame for entity {entity.id}: {str(e)}")
+            # Continue even if frame creation fails, as the entity is still valid
+        
         serializer = EntitySerializer(entity)
-        return Response(serializer.data)
+        return Response(serializer.data, status=201)
 
     def list(self, request: Request) -> Response:
         queryset: BaseManager[Entity] = Entity.objects.all()

@@ -1,0 +1,98 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls static %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+    /* Custom styles for the suggestions page */
+    .suggestions-container {
+        margin: 20px 0;
+    }
+    .suggestion-card {
+        background: #f8f8f8;
+        border: 1px solid #e0e0e0;
+        border-radius: 4px;
+        padding: 15px;
+        margin-bottom: 15px;
+    }
+    .suggestion-header {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 10px;
+        padding-bottom: 5px;
+        border-bottom: 1px solid #e0e0e0;
+    }
+    .suggestion-title {
+        font-size: 1.2em;
+        font-weight: bold;
+    }
+    .suggestion-meta {
+        color: #666;
+        font-size: 0.9em;
+    }
+    .suggestion-definition {
+        margin: 10px 0;
+        line-height: 1.5;
+    }
+    .suggestion-actions {
+        margin-top: 10px;
+        text-align: right;
+    }
+    .button {
+        background: #417690;
+        color: white;
+        padding: 6px 12px;
+        border-radius: 4px;
+        text-decoration: none;
+        font-size: 0.9em;
+    }
+    .button:hover {
+        background: #205067;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="suggestions-container">
+    <h1>{% blocktrans with entity_name=entity.name %}Frame Suggestions for {{ entity_name }}{% endblocktrans %}</h1>
+    
+    {% if suggestions %}
+        <p>{% blocktrans count counter=suggestions|length %}
+            Found {{ counter }} suggestion
+        {% plural %}
+            Found {{ counter }} suggestions
+        {% endblocktrans %}</p>
+        
+        {% for suggestion in suggestions %}
+        <div class="suggestion-card">
+            <div class="suggestion-header">
+                <span class="suggestion-title">{{ suggestion.name }}</span>
+                <span class="suggestion-meta">ID: {{ suggestion.id }}</span>
+            </div>
+            
+            {% if suggestion.definition %}
+            <div class="suggestion-definition">
+                {{ suggestion.definition }}
+            </div>
+            {% endif %}
+            
+            <div class="suggestion-actions">
+                <a href="{% url 'admin:coreapp_frame_add' %}?fnid={{ suggestion.id }}&entity={{ entity.id }}" class="button">
+                    {% trans 'Use this frame' %}
+                </a>
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="alert alert-info">
+            {% trans 'No frame suggestions found for this entity.' %}
+        </div>
+    {% endif %}
+    
+    <div class="submit-row" style="margin-top: 20px;">
+        <a href="{% url 'admin:coreapp_entity_change' entity.id %}" class="button">
+            {% trans 'Back to entity' %}
+        </a>
+    </div>
+</div>
+{% endblock %}

@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useQuery } from 'react-query';
 import { FiAlertCircle, FiLoader, FiPlus, FiServer, FiCheck } from 'react-icons/fi';
-import { Environment } from './types.ts';
+import { Environment } from './types';
+import { api } from './api/config';
 
 interface Props {
   onEnvSelected: (env: Environment | null) => void;
@@ -17,24 +18,13 @@ export default function EnvironmentsList({ onEnvSelected }: Props) {
     data: environments = [],
     error 
   } = useQuery<Environment[]>('environments', async () => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      throw new Error('No authentication token found');
+    try {
+      const response = await api.get('/env');
+      return response.json();
+    } catch (error: any) {
+      console.error('Failed to fetch environments:', error);
+      throw new Error(error.message || 'Failed to fetch environments');
     }
-
-    const response = await fetch('http://localhost:8000/api/env', {
-      headers: {
-        'Authorization': `Token ${token}`,
-        'Content-Type': 'application/json',
-      },
-      credentials: 'include',
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.detail || 'Failed to fetch environments');
-    }
-    return response.json();
   });
 
   const handleEnvClick = (env: Environment) => {

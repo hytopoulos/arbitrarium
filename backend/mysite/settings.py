@@ -28,6 +28,22 @@ DEBUG = True
 # Allow all hosts for development
 ALLOWED_HOSTS = ['*']
 
+# Security settings for development
+if DEBUG:
+    # Disable security checks in development
+    SILENCED_SYSTEM_CHECKS = [
+        'security.W004',  # SECURE_HSTS_SECONDS
+        'security.W008',  # SECURE_SSL_REDIRECT
+        'security.W009',  # SECRET_KEY
+        'security.W012',  # SESSION_COOKIE_SECURE
+        'security.W016',  # CSRF_COOKIE_SECURE
+        'security.W018',  # DEBUG
+    ]
+    
+    # Development-specific settings
+    CSRF_COOKIE_SECURE = False
+    SESSION_COOKIE_SECURE = False
+
 # Trusted origins for CSRF
 CSRF_TRUSTED_ORIGINS = [
     'http://localhost:8000',
@@ -35,6 +51,23 @@ CSRF_TRUSTED_ORIGINS = [
     'http://127.0.0.1:8000',
     'http://127.0.0.1:8080',
 ]
+
+# Lexical Services Configuration
+LEXICAL_SERVICES = {
+    # Default NLTK-based implementations
+    'wordnet': 'arb.nltk_impl.wordnet_wrapper.NLTKWordNetService',
+    'framenet': 'arb.nltk_impl.framenet_wrapper.NLTKFrameNetService',
+    
+    # Configuration options for NLTK data
+    'nltk_data_path': None,  # Set to a custom path if NLTK data is stored elsewhere
+    
+    # Cache settings for lexical services
+    'cache': {
+        'enabled': True,
+        'timeout': 3600,  # 1 hour
+        'max_entries': 1000,
+    },
+}
 
 # Application definition
 
@@ -89,7 +122,7 @@ WSGI_APPLICATION = 'mysite.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'arb',
+        'NAME': 'arb_test',
         'USER': 'arb',
         'PASSWORD': 'arb',
         'HOST': 'postgres',
@@ -98,6 +131,12 @@ DATABASES = {
 }
 
 AUTH_USER_MODEL = "coreapp.User"
+
+# Custom authentication backends
+AUTHENTICATION_BACKENDS = [
+    'coreapp.backends.EmailBackend',
+    'django.contrib.auth.backends.ModelBackend',  # Fallback to default
+]
 
 # REST Framework settings
 REST_FRAMEWORK = {
@@ -111,7 +150,7 @@ REST_FRAMEWORK = {
 }
 
 # CORS settings
-CORS_ALLOW_ALL_ORIGINS = True  # For development only
+CORS_ALLOW_ALL_ORIGINS = False  # Be explicit about allowed origins
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:3000',  # React dev server
@@ -119,6 +158,12 @@ CORS_ALLOWED_ORIGINS = [
     'http://127.0.0.1:3000',
     'http://127.0.0.1:8080',
 ]
+
+# Required for credentials to work with CORS
+CORS_EXPOSE_HEADERS = ['Content-Type', 'X-CSRFToken']
+SESSION_COOKIE_SAMESITE = 'Lax'
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SECURE = False  # Set to True in production with HTTPS
 
 # Allow all headers and methods for development
 CORS_ALLOW_HEADERS = [
@@ -182,3 +227,49 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Logging configuration
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'level': 'DEBUG',
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+        'file': {
+            'level': 'DEBUG',
+            'class': 'logging.FileHandler',
+            'filename': 'django_debug.log',
+            'formatter': 'verbose',
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+        'coreapp': {
+            'handlers': ['console', 'file'],
+            'level': 'DEBUG',
+            'propagate': True,
+        },
+        'arb': {
+            'handlers': ['console', 'file'],
+            'level': 'DEBUG',
+            'propagate': True,
+        },
+    },
+}

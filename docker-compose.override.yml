@@ -1,0 +1,72 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: builder  # Use the builder stage for development
+    environment:
+      - DJANGO_SETTINGS_MODULE=mysite.settings
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - DATABASE_URL=postgresql://arb:arb@postgres:5432/arb_test
+      - DEBUG=1
+      - SECRET_KEY=your-secret-key-here
+      - ALLOWED_HOSTS=localhost,127.0.0.1
+    command: >
+      sh -c "python manage.py wait_for_db && \
+             python manage.py migrate && \
+             python manage.py check --deploy --fail-level WARNING && \
+             python manage.py runserver 0.0.0.0:8000"
+    volumes:
+      - ./backend:/backend
+      - /backend/__pycache__
+      - /backend/.pytest_cache
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  postgres:
+    image: postgres:13-alpine
+    environment:
+      - POSTGRES_USER=arb
+      - POSTGRES_PASSWORD=arb
+      - POSTGRES_DB=arb_test
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data_test:/var/lib/postgresql/data/
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U arb -d arb_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    environment:
+      - NODE_ENV=development
+      - REACT_APP_API_BASE=/api
+      - CHOKIDAR_USEPOLLING=true
+      - WDS_SOCKET_PORT=0
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./frontend:/frontend
+      - /frontend/node_modules
+    working_dir: /frontend
+    stdin_open: true
+    tty: true
+    networks:
+      - app_network
+
+volumes:
+  postgres_data_test:

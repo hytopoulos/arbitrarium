@@ -98,6 +98,30 @@ Update an element's value.
 
 #### Phase 1: Model Updates (1 week)
 - Update database models
+
+### 7. Core Element Validation
+
+When creating a new frame, the system now validates that all required core elements are provided. Core elements are those with a `core_type` of 'Core' or 'Core-Unexpressed' in FrameNet.
+
+#### Backend Validation
+
+The backend API endpoint for frame creation (`POST /api/frames/`) now includes validation logic:
+
+1. When a frame is created with a `frame_type` or `name` parameter, the system queries FrameNet to get the required core elements for that frame type.
+2. It checks if all required core elements are provided in the request data.
+3. If any required core elements are missing, the API returns a 400 Bad Request response with details about the missing elements.
+
+#### Frontend Implementation
+
+The frontend EntityView component now:
+
+1. Fetches core frame elements when a frame type is selected using the `GET /api/framenet/elements/{frame_type}/` endpoint.
+2. Displays input fields for all required core elements (those with `core_type` of 'Core' or 'Core-Unexpressed').
+3. Validates that all required core elements have values before allowing frame creation.
+4. Includes the selected core element values in the frame creation request.
+5. Creates elements after the frame is successfully created.
+
+This ensures that all frames have the required core elements populated, improving data integrity and enabling more sophisticated frame-based simulations.
 - Create and run migrations
 - Update serializers
 

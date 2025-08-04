@@ -1,3 +1,4 @@
+import logging
 from typing import Optional, List, Dict, Any
 from django.db.models.manager import BaseManager
 from rest_framework.viewsets import ModelViewSet
@@ -10,8 +11,14 @@ from django.shortcuts import get_object_or_404
 from django.db.models import Q
 from coreapp.models import Frame, Entity, Element
 from coreapp.serializers import FrameSerializer, ElementSerializer
-from coreapp.services.frame_suggestor import FrameSuggestor
+from coreapp.services.frame_application import FrameApplicator
+from coreapp.services.frame_suggestion import FrameSuggestionService
+from coreapp.models import Environment, Entity
 from django.core.cache import cache
+from django.conf import settings
+
+# Set up logging
+logger = logging.getLogger(__name__)
 
 class FrameViewSet(ModelViewSet):
     """
@@ -20,9 +27,9 @@ class FrameViewSet(ModelViewSet):
     queryset: BaseManager[Frame] = Frame.objects.all()
     serializer_class = FrameSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ['name', 'definition']
-    ordering_fields = ['name', 'created_at', 'updated_at', 'is_primary']
-    ordering = ['-is_primary', 'name']
+    search_fields = ['fnid', 'definition']
+    ordering_fields = ['fnid', 'created_at', 'updated_at', 'is_primary']
+    ordering = ['-is_primary', 'fnid']
     
     # Explicitly set authentication and permission classes
     # to ensure they can be overridden in tests
@@ -38,6 +45,51 @@ class FrameViewSet(ModelViewSet):
         if entity_id is not None:
             queryset = queryset.filter(entity_id=entity_id)
         return queryset
+        
+    @action(detail=False, methods=['post'], url_path='suggest-frames')
+    def suggest_frames(self, request):
+        """
+        Suggest frames based on a list of FrameNet IDs.
+        
+        Expected request body:
+        {
+            "framenet_ids": ["Person", "Item"],
+            "environment_id": 123  # Optional
+        }
+        """
+        framenet_ids = request.data.get('framenet_ids', [])
+        environment_id = request.data.get('environment_id')
+        
+        if not framenet_ids or not isinstance(framenet_ids, list):
+            return Response(
+                {"error": "framenet_ids is required and must be a list"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            # Initialize the frame suggestion service
+            suggestion_service = FrameSuggestionService()
+            
+            # Get frame suggestions
+            suggestions = suggestion_service.suggest_frames(
+                framenet_ids=framenet_ids,
+                environment_id=environment_id
+            )
+            
+            return Response({
+                "suggested_frames": suggestions,
+                "input": {
+                    "framenet_ids": framenet_ids,
+                    "environment_id": environment_id
+                }
+            })
+            
+        except Exception as e:
+            logger.error(f"Error suggesting frames: {str(e)}")
+            return Response(
+                {"error": "An error occurred while suggesting frames"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
     def create(self, request: Request) -> Response:
         """
@@ -159,8 +211,8 @@ class FrameViewSet(ModelViewSet):
             frame.is_primary = True
             frame.save(update_fields=['is_primary', 'updated_at'])
             
-            # Clear the cache for frame suggestions for this entity
-            cache_key = FrameSuggestor.get_cache_key(frame.entity_id, 5)  # Default limit
+            # Clear the cache for frame suggestions for this entity using consistent key format
+            cache_key = f"frame_suggestions:{frame.entity_id}:5"  # Default limit of 5
             cache.delete(cache_key)
         
         return Response(
@@ -177,7 +229,7 @@ class FrameViewSet(ModelViewSet):
             Frame.objects.filter(entity=instance.entity, is_primary=True).update(is_primary=False)
         
         # Clear the cache for frame suggestions for this entity
-        cache_key = FrameSuggestor.get_cache_key(instance.entity_id, 5)  # Default limit
+        cache_key = f"frame_suggestions:{instance.entity_id}:5"
         cache.delete(cache_key)
             
         return super().update(request, *args, **kwargs)
@@ -188,7 +240,7 @@ class FrameViewSet(ModelViewSet):
         entity_id = instance.entity_id
         
         # Clear the cache for frame suggestions for this entity
-        cache_key = FrameSuggestor.get_cache_key(entity_id, 5)  # Default limit
+        cache_key = f"frame_suggestions:{entity_id}:5"
         cache.delete(cache_key)
         
         return super().destroy(request, *args, **kwargs)
@@ -222,7 +274,7 @@ class FrameViewSet(ModelViewSet):
                 # Clear cache for all affected entities
                 entity_ids = {frame.entity_id for frame in instances}
                 for entity_id in entity_ids:
-                    cache_key = FrameSuggestor.get_cache_key(entity_id, 5)
+                    cache_key = f"frame_suggestions:{entity_id}:5"
                     cache.delete(cache_key)
                     
             return Response(
@@ -291,7 +343,7 @@ class FrameViewSet(ModelViewSet):
                 
                 # Clear cache for all affected entities
                 for entity_id in entity_ids:
-                    cache_key = FrameSuggestor.get_cache_key(entity_id, 5)
+                    cache_key = f"frame_suggestions:{entity_id}:5"
                     cache.delete(cache_key)
                 
                 return Response(
@@ -327,25 +379,35 @@ class FrameViewSet(ModelViewSet):
             )
         
         try:
+            # Get the entity
             entity = Entity.objects.get(id=entity_id)
             
-            # Get suggested frames from the FrameSuggestor service
-            suggested_frames = FrameSuggestor.suggest_frames(entity, limit=limit)
+            # Get the environment for this entity
+            environment = entity.env
             
-            # Get existing frames for this entity to avoid suggesting duplicates
-            existing_frames = set(Frame.objects.filter(entity=entity).values_list('fnid', flat=True))
+            # Get frame suggestions using FrameApplicator
+            frame_applicator = FrameApplicator(environment)
+            entities = [entity]
+            context = {'request': request}  # Add any additional context needed
             
-            # Filter out frames that already exist for this entity
-            unique_suggestions = [
-                frame for frame in suggested_frames 
-                if frame['fnid'] not in existing_frames
-            ]
+            # Get potential frames
+            potential_frames = frame_applicator.find_applicable_frames(entities, context)
             
-            # Add a flag to indicate if the frame already exists for the entity
-            for frame in unique_suggestions:
-                frame['already_added'] = frame['fnid'] in existing_frames
+            # Format the response to match the expected format
+            suggestions = []
+            for frame_match in potential_frames[:limit]:
+                frame = frame_match.frame
+                suggestions.append({
+                    'fnid': frame.fnid if hasattr(frame, 'fnid') else None,
+                    'name': frame.name,
+                    'definition': getattr(frame, 'definition', ''),
+                    'score': frame_match.score,
+                    'match_type': 'semantic',  # Default match type
+                    'lex_unit': getattr(frame, 'lex_unit', None),
+                    'role_assignments': {}
+                })
             
-            return Response(unique_suggestions)
+            return Response(suggestions)
             
         except Entity.DoesNotExist:
             return Response(

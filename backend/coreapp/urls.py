@@ -1,9 +1,10 @@
 from django.urls import path, include
 from django.urls.resolvers import URLPattern
 from rest_framework.routers import DefaultRouter
-from .views import auth
+from .views import auth, health
 
 urlpatterns: list[URLPattern] = [
+    path('health/', health.health_check, name='health_check'),
     path('auth/csrf/', auth.get_csrf, name='get_csrf'),
     path('auth/token/', auth.obtain_auth_token, name='obtain_token'),
     path('auth/validate/', auth.validate_token, name='validate_token'),
@@ -36,9 +37,15 @@ urlpatterns += [path(route='', view=include(corpus_router.urls))]
 
 ## Frame API routes
 from .views import frame
+from .views.framenet import FrameNetViewSet
 frame_router = DefaultRouter()
 frame_router.register(r'frame', frame.FrameViewSet, basename='frame')
 urlpatterns += [path(route='', view=include(frame_router.urls))]
+
+## FrameNet API routes
+framenet_router = DefaultRouter()
+framenet_router.register(r'framenet', FrameNetViewSet, basename='framenet')
+urlpatterns += [path(route='', view=include(framenet_router.urls))]
 
 ## Element API routes
 from .views import element

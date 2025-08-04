@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import axios from 'axios';
+import { api, getCSRFToken, setCSRFToken, setAuthToken } from './api/config';
 import { FiMail, FiLock, FiLogIn } from 'react-icons/fi';
 
 interface UserLoginProps {
@@ -10,7 +10,7 @@ interface UserLoginProps {
 
 const UserLogin: React.FC<UserLoginProps> = ({ onSuccess, onError, onSwitchToSignUp }) => {
   const [formData, setFormData] = useState({
-    username: '',
+    email: '',
     password: '',
   });
   const [isLoading, setIsLoading] = useState(false);
@@ -34,8 +34,10 @@ const UserLogin: React.FC<UserLoginProps> = ({ onSuccess, onError, onSwitchToSig
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
     
-    if (!formData.username.trim()) {
-      newErrors.username = 'Username or email is required';
+    if (!formData.email.trim()) {
+      newErrors.email = 'Email is required';
+    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
+      newErrors.email = 'Please enter a valid email address';
     }
     
     if (!formData.password) {
@@ -48,40 +50,70 @@ const UserLogin: React.FC<UserLoginProps> = ({ onSuccess, onError, onSwitchToSig
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsLoading(true);
+    setErrors({});
     
-    if (!validateForm()) {
+    // Basic validation
+    if (!formData.email || !formData.password) {
+      setErrors({ form: 'Please fill in all fields' });
+      setIsLoading(false);
       return;
     }
     
-    setIsLoading(true);
-    
     try {
-      // Using our custom token authentication endpoint
-      const response = await axios.post('http://localhost:8000/api/auth/token/', {
-        username: formData.username,
-        password: formData.password,
-      }, {
+      console.log('Attempting login with email:', formData.email);
+      
+      // First, ensure we have a CSRF token
+      const csrfToken = await setCSRFToken();
+      if (!csrfToken) {
+        throw new Error('Failed to get CSRF token');
+      }
+      
+      // Make the login request using the configured api instance
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000/api'}/auth/token/`, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'X-CSRFToken': csrfToken || '',
         },
-        withCredentials: true  // Important for CSRF
+        credentials: 'include',
+        body: JSON.stringify({
+          email: formData.email,
+          password: formData.password,
+        }),
       });
       
-      console.log('Login response:', response.data);
+      console.log('Login response status:', response.status);
       
-      if (response.data.token) {
-        // Store the token in local storage
-        localStorage.setItem('token', response.data.token);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Login error response:', errorData);
+        throw new Error(errorData.error || 'Login failed');
+      }
+      
+      const responseData = await response.json();
+      console.log('Login response data:', responseData);
+      
+      if (responseData && responseData.token) {
+        // Store the token and user data
+        setAuthToken(responseData.token);
         
-        // Also store user info if available
-        if (response.data.user_id) {
-          localStorage.setItem('user_id', response.data.user_id);
+        if (responseData.user_id) {
+          localStorage.setItem('user_id', responseData.user_id);
         }
-        if (response.data.email) {
-          localStorage.setItem('user_email', response.data.email);
+        if (responseData.email) {
+          localStorage.setItem('user_email', responseData.email);
+        }
+        if (responseData.environment_id) {
+          localStorage.setItem('current_environment_id', responseData.environment_id);
         }
         
         console.log('Login successful, token stored');
+        
+        // Verify token is stored
+        const storedToken = localStorage.getItem('token');
+        console.log('Stored token:', storedToken ? 'Token found' : 'No token found');
+        
         if (onSuccess) onSuccess();
       } else {
         throw new Error('No token received in response');
@@ -90,23 +122,27 @@ const UserLogin: React.FC<UserLoginProps> = ({ onSuccess, onError, onSwitchToSig
     } catch (error: any) {
       console.error('Login error:', error);
       
-      let errorMessage = 'Invalid username or password';
-      if (error.response?.data?.error) {
-        errorMessage = error.response.data.error;
-      } else if (error.response?.data?.detail) {
-        errorMessage = error.response.data.detail;
+      let errorMessage = 'Login failed. Please try again.';
+      
+      if (error.response) {
+        // The request was made and the server responded with a status code
+        // that falls out of the range of 2xx
+        const errorData = await error.response.json().catch(() => ({}));
+        errorMessage = errorData.detail || errorData.error || `Server error: ${error.response.status}`;
+      } else if (error.request) {
+        // The request was made but no response was received
+        errorMessage = 'No response from server. Please check your connection.';
       } else if (error.message) {
+        // Something happened in setting up the request
         errorMessage = error.message;
       }
       
-      // Clear any existing token on failed login
-      localStorage.removeItem('token');
+      console.error('Error details:', { error, message: error.message });
       
       setErrors(prev => ({
         ...prev,
         form: errorMessage,
       }));
-      
       if (onError) {
         onError(errorMessage);
       }
@@ -126,29 +162,27 @@ const UserLogin: React.FC<UserLoginProps> = ({ onSuccess, onError, onSwitchToSig
       )}
       
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-1">
-            Username or Email
+        <div className="mb-4">
+          <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+            Email
           </label>
           <div className="relative">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <FiMail className="h-5 w-5 text-gray-400" />
             </div>
             <input
-              type="text"
-              id="username"
-              name="username"
-              value={formData.username}
+              id="email"
+              name="email"
+              type="email"
+              autoComplete="email"
+              value={formData.email}
               onChange={handleChange}
-              className={`pl-10 w-full px-4 py-2 border ${
-                errors.username ? 'border-red-500' : 'border-gray-300'
-              } rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-transparent`}
-              placeholder="Enter your username or email"
+              className={`block w-full pl-10 pr-3 py-2 border ${errors.email ? 'border-red-500' : 'border-gray-300'} rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
               disabled={isLoading}
             />
           </div>
-          {errors.username && (
-            <p className="mt-1 text-sm text-red-600">{errors.username}</p>
+          {errors.email && (
+            <p className="mt-1 text-sm text-red-600">{errors.email}</p>
           )}
         </div>
         
@@ -192,9 +226,13 @@ const UserLogin: React.FC<UserLoginProps> = ({ onSuccess, onError, onSwitchToSig
           </div>
           
           <div className="text-sm">
-            <a href="#" className="font-medium text-indigo-600 hover:text-indigo-500">
+            <button 
+              type="button" 
+              className="font-medium text-indigo-600 hover:text-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+              onClick={() => { /* TODO: Implement forgot password functionality */ }}
+            >
               Forgot your password?
-            </a>
+            </button>
           </div>
         </div>
         

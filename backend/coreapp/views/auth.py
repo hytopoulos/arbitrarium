@@ -15,6 +15,8 @@ from coreapp.models import Environment
 User = get_user_model()
 
 @api_view(['GET'])
+@permission_classes([AllowAny])
+@authentication_classes([])
 @ensure_csrf_cookie
 def get_csrf(request: Request) -> Response:
     return Response({'success': 'CSRF cookie set'})
@@ -25,59 +27,100 @@ def get_csrf(request: Request) -> Response:
 def obtain_auth_token(request: Request) -> Response:
     """
     User login and token generation endpoint.
-    Expected POST data: { "username": "...", "password": "..." }
+    Expected POST data: { "email": "...", "password": "..." }
     """
-    username = request.data.get('username')
+    print(f"[AUTH] Login attempt - Headers: {request.headers}")
+    print(f"[AUTH] Login attempt - Data: {request.data}")
+    
+    email = request.data.get('email')
     password = request.data.get('password')
     
-    if not username or not password:
+    if not email or not password:
+        print("[AUTH] Missing email or password in request")
         return Response(
-            {'error': 'Please provide both username and password'},
+            {'error': 'Please provide both email and password'},
             status=status.HTTP_400_BAD_REQUEST
         )
     
-    # Authenticate user
-    user = authenticate(username=username, password=password)
+    print(f"[AUTH] Attempting to authenticate user: {email}")
     
-    if user is not None:
-        if user.is_active:
-            # Get or create token for the user
-            token, created = Token.objects.get_or_create(user=user)
+    try:
+        # First, try to get the user by email
+        try:
+            user = User.objects.get(email=email)
+            print(f"[AUTH] Found user: {user.email}")
             
-            # Ensure user has at least one environment
-            if not Environment.objects.filter(user=user).exists():
-                # Create a default environment for the user
-                default_env = Environment.objects.create(
+            # Then authenticate with the provided password
+            authenticated_user = authenticate(username=user.email, password=password)
+            if not authenticated_user:
+                print(f"[AUTH] Authentication failed for user: {email}")
+                return Response(
+                    {'error': 'Invalid email or password'},
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
+                
+            user = authenticated_user
+            
+        except User.DoesNotExist:
+            print(f"[AUTH] User not found with email: {email}")
+            return Response(
+                {'error': 'Invalid email or password'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        if not user.is_active:
+            print(f"[AUTH] User account is disabled: {email}")
+            return Response(
+                {'error': 'User account is disabled'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Get or create token for the user
+        token, created = Token.objects.get_or_create(user=user)
+        print(f"[AUTH] {'Created new' if created else 'Using existing'} token for user: {user.email}")
+        
+        # Ensure user has at least one environment
+        user_environment = Environment.objects.filter(user=user).first()
+        if not user_environment:
+            try:
+                # Try to create a default environment for the user
+                user_environment = Environment.objects.create(
                     user=user,
                     name='Default Environment',
                     description='Automatically created default environment',
                     created_at=timezone.now(),
                     updated_at=timezone.now()
                 )
-                print(f"Created default environment {default_env.id} for user {user.email}")
-            
-            # Log the user in (optional, for session auth)
-            login(request, user)
-            
-            # Get the user's first environment (should exist now)
-            user_environment = Environment.objects.filter(user=user).first()
-            
-            return Response({
-                'token': token.key,
-                'user_id': user.pk,
-                'email': user.email,
-                'username': user.username,
-                'environment_id': user_environment.id if user_environment else None
-            })
-        else:
-            return Response(
-                {'error': 'User account is disabled'},
-                status=status.HTTP_403_FORBIDDEN
-            )
-    else:
+                print(f"[AUTH] Created default environment {user_environment.id} for user {user.email}")
+            except Exception as e:
+                print(f"[AUTH] Error creating default environment: {e}")
+                # If creating default environment fails, just get the first environment for the user
+                user_environment = Environment.objects.filter(user=user).first()
+                if user_environment:
+                    print(f"[AUTH] Using existing environment {user_environment.id} for user {user.email}")
+        
+        # Log the user in (for session auth)
+        login(request, user)
+        print(f"[AUTH] Successfully logged in user: {user.email}")
+        
+        response_data = {
+            'token': token.key,
+            'user_id': user.pk,
+            'email': user.email,
+            'username': user.username,
+            'environment_id': user_environment.id if user_environment else None
+        }
+        print(f"[AUTH] Sending response: {response_data}")
+        
+        return Response(response_data)
+        
+    except Exception as e:
+        print(f"[AUTH] Unexpected error during authentication: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return Response(
-            {'error': 'Invalid username or password'},
-            status=status.HTTP_401_UNAUTHORIZED
+            {'error': 'An error occurred during authentication'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
 @api_view(['GET', 'POST'])

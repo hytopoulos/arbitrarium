@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import axios from 'axios';
+import { api } from './api/config';
 import { FiUser, FiMail, FiLock, FiArrowRight } from 'react-icons/fi';
 
 interface UserRegistrationProps {
@@ -69,14 +69,21 @@ const UserRegistration: React.FC<UserRegistrationProps> = ({ onSuccess, onError 
     setIsLoading(true);
     
     try {
-      const response = await axios.post('http://localhost:8000/api/auth/register/', {
+      const response = await api.post('/auth/register/', {
         username: formData.username,
         email: formData.email,
         password: formData.password1,
       });
       
-      console.log('Registration successful:', response.data);
-      if (onSuccess) onSuccess();
+      if (response.ok) {
+        const responseData = await response.json();
+        console.log('Registration successful:', responseData);
+        if (onSuccess) onSuccess();
+      } else {
+        // Handle non-OK responses
+        const errorData = await response.json().catch(() => ({}));
+        throw { response: { data: errorData, status: response.status }};
+      }
       
     } catch (error: any) {
       console.error('Registration error:', error);

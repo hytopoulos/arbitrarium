@@ -1,0 +1,212 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls static %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+    /* Custom styles for the suggestions page */
+    .suggestions-container {
+        margin: 20px 0;
+    }
+    
+    .entity-info {
+        background: #f8f8f8;
+        border: 1px solid #e0e0e0;
+        border-radius: 4px;
+        padding: 15px;
+        margin-bottom: 20px;
+    }
+    
+    .suggestion-card {
+        background: white;
+        border: 1px solid #e0e0e0;
+        border-radius: 4px;
+        padding: 15px;
+        margin-bottom: 15px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    
+    .suggestion-header {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 10px;
+        padding-bottom: 5px;
+        border-bottom: 1px solid #e0e0e0;
+    }
+    
+    .suggestion-title {
+        font-size: 1.2em;
+        font-weight: bold;
+        color: #417690;
+    }
+    
+    .suggestion-meta {
+        color: #666;
+        font-size: 0.9em;
+    }
+    
+    .suggestion-definition {
+        margin: 10px 0;
+        line-height: 1.5;
+        color: #333;
+    }
+    
+    .suggestion-actions {
+        margin-top: 10px;
+        text-align: right;
+    }
+    
+    .button, input[type="submit"] {
+        background: #417690;
+        color: white;
+        padding: 6px 12px;
+        border-radius: 4px;
+        text-decoration: none;
+        font-size: 0.9em;
+        border: none;
+        cursor: pointer;
+    }
+    
+    .button:hover, input[type="submit"]:hover {
+        background: #205067;
+    }
+    
+    .button.secondary {
+        background: #999;
+    }
+    
+    .button.secondary:hover {
+        background: #666;
+    }
+    
+    .action-counter {
+        margin: 0 8px;
+        color: #666;
+    }
+    
+    .no-suggestions {
+        padding: 20px;
+        text-align: center;
+        color: #666;
+        font-style: italic;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="suggestions-container">
+    <h1>{% blocktrans with entity_name=entity.name %}Frame Suggestions for {{ entity_name }}{% endblocktrans %}</h1>
+    
+    <div class="entity-info">
+        <h3>Entity Information</h3>
+        <p><strong>Name:</strong> {{ entity.name }}</p>
+        {% if entity.fnid %}
+            <p><strong>FrameNet ID:</strong> {{ entity.fnid }}</p>
+        {% endif %}
+        {% if entity.environment %}
+            <p><strong>Environment:</strong> {{ entity.environment.name }}</p>
+        {% endif %}
+        {% if entity.frames.exists %}
+            <p><strong>Current Frames:</strong>
+                {% for frame in entity.frames.all %}
+                    {{ frame.name }}{% if not forloop.last %}, {% endif %}
+                {% endfor %}
+            </p>
+        {% endif %}
+    </div>
+    
+    <!-- Debug information -->
+    <div class="debug-info" style="background: #f0f0f0; padding: 15px; margin: 20px 0; border: 1px solid #ddd; border-radius: 5px;">
+        <h3 style="margin-top: 0; color: #666;">Debug Information</h3>
+        <div style="background: white; padding: 10px; border: 1px solid #ddd; border-radius: 3px; margin-bottom: 10px;">
+            <h4>Context Variables</h4>
+            <p><strong>Title:</strong> {{ title }}</p>
+            <p><strong>Entity:</strong> {{ entity.name }} (ID: {{ entity.id }}, FrameNet ID: {{ entity.fnid|default:"None" }})</p>
+            <p><strong>Has Permission:</strong> {{ has_permission|yesno:"Yes,No" }}</p>
+            <p><strong>Number of suggestions:</strong> {{ suggestions|length }}</p>
+        </div>
+        
+        <div style="background: white; padding: 10px; border: 1px solid #ddd; border-radius: 3px;">
+            <h4>Suggestions Data (First 2 items)</h4>
+            {% if suggestions %}
+                <pre style="max-height: 200px; overflow: auto; background: #f8f8f8; padding: 10px; border: 1px solid #eee;">
+                    {{ suggestions|slice:":2"|pprint }}
+                </pre>
+                {% if suggestions|length > 2 %}
+                    <p>... and {{ suggestions|length|add:"-2" }} more</p>
+                {% endif %}
+            {% else %}
+                <p>No suggestions available</p>
+            {% endif %}
+        </div>
+    </div>
+    
+    {% if suggestions %}
+        <h2>{% blocktrans count counter=suggestions|length %}
+            Found {{ counter }} suggestion
+        {% plural %}
+            Found {{ counter }} suggestions
+        {% endblocktrans %}</h2>
+        
+        <form method="post" action="">
+            {% csrf_token %}
+            <input type="hidden" name="entity_id" value="{{ entity.id }}">
+            
+            <div class="suggestions-list">
+                {% for suggestion in suggestions %}
+                <div class="suggestion-card">
+                    <div class="suggestion-header">
+                        <span class="suggestion-title">{{ suggestion.name }}</span>
+                        <span class="suggestion-meta">ID: {{ suggestion.fnid }}</span>
+                    </div>
+                    
+                    {% if suggestion.definition %}
+                    <div class="suggestion-definition">
+                        {{ suggestion.definition }}
+                    </div>
+                    {% endif %}
+                    
+                    {% if suggestion.elements %}
+                    <div class="suggestion-elements">
+                        <p><strong>Elements:</strong></p>
+                        <ul>
+                            {% for element in suggestion.elements %}
+                            <li>
+                                <strong>{{ element.name }}</strong> 
+                                ({{ element.core_type }}): 
+                                {{ element.definition|default:"No definition available" }}
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="suggestion-actions">
+                        <input type="hidden" name="frame_id" value="{{ suggestion.fnid }}">
+                        <button type="submit" name="apply" class="button" 
+                                title="{% trans 'Add this frame to the entity' %}">
+                            {% trans 'Use this frame' %}
+                        </button>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            
+            <div class="submit-row" style="margin-top: 20px;">
+                <a href="{% url 'admin:coreapp_entity_change' entity.id %}" class="button secondary">
+                    {% trans 'Back to entity' %}
+                </a>
+            </div>
+        </form>
+    {% else %}
+        <div class="no-suggestions">
+            <p>{% trans 'No frame suggestions found for this entity.' %}</p>
+            <p>
+                <a href="{% url 'admin:coreapp_entity_change' entity.id %}" class="button">
+                    {% trans 'Back to entity' %}
+                </a>
+            </p>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

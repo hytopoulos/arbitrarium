@@ -1,0 +1,95 @@
+import React, { useState, useEffect } from 'react';
+import { Environment, Entity } from '../../types';
+import { useResponsive } from '../../hooks/useResponsive';
+import { Box, Flex } from './primitives';
+import { Sidebar } from './Sidebar';
+import { MainContent } from './MainContent';
+import { CorpusSidebar } from './CorpusSidebar';
+import GraphView from '../../GraphView';
+import EntityView from '../../EntityView';
+
+type GraphViewProps = {
+  environment: Environment[];
+  onEntitySelect: (entity: Entity | null) => void;
+};
+
+export interface MainLayoutProps {
+  currentEnv: Environment | null;
+  selectedEntity: Entity | null;
+  onEnvSelected: (env: Environment | null) => void;
+  onEntitySelect: (entity: Entity | null) => void;
+  onAddToEnvironment: () => void;
+  isSidebarOpen: boolean;
+  onToggleSidebar: () => void;
+}
+
+export const MainLayout: React.FC<MainLayoutProps> = ({
+  currentEnv,
+  selectedEntity,
+  onEnvSelected,
+  onEntitySelect,
+  onAddToEnvironment,
+  isSidebarOpen,
+  onToggleSidebar,
+}) => {
+  const { isMobile } = useResponsive();
+
+  // Close sidebar when an environment is selected on mobile
+  useEffect(() => {
+    if (isMobile && currentEnv && isSidebarOpen) {
+      onToggleSidebar();
+    }
+  }, [currentEnv, isMobile, isSidebarOpen, onToggleSidebar]);
+
+  return (
+    <Flex className="flex-1 overflow-hidden relative">
+      {/* Sidebar */}
+      <Sidebar 
+        isOpen={isSidebarOpen} 
+        onClose={onToggleSidebar}
+        isMobile={isMobile}
+        currentEnv={currentEnv}
+        onEnvSelected={onEnvSelected}
+      />
+
+      {/* Main Content */}
+      <MainContent className="transition-all duration-200 ease-in-out">
+        {currentEnv ? (
+          <>
+            <Box className="flex-1 overflow-auto">
+<div className="w-full h-full min-h-[60vh]">
+                <GraphView 
+                  environment={[currentEnv]} 
+                  onEntitySelect={onEntitySelect}
+                />
+              </div>
+            </Box>
+            {selectedEntity && (
+              <Box className="border-t border-gray-200 p-4 bg-white">
+                <EntityView entity={selectedEntity} />
+              </Box>
+            )}
+          </>
+        ) : (
+          <Flex className="flex-1 items-center justify-center p-8 text-center">
+            <div className="max-w-md">
+              <h2 className="text-lg font-medium text-gray-900 mb-2">No Environment Selected</h2>
+              <p className="text-gray-500">
+                {isMobile ? 'Tap the menu button to select an environment' : 'Select an environment from the sidebar to get started'}
+              </p>
+            </div>
+          </Flex>
+        )}
+      </MainContent>
+
+      {/* Corpus Sidebar */}
+      <CorpusSidebar 
+        environment={currentEnv ? [currentEnv] : []}
+        onAddToEnvironment={onAddToEnvironment}
+        className={!currentEnv ? 'hidden' : ''}
+      />
+    </Flex>
+  );
+};
+
+export default MainLayout;

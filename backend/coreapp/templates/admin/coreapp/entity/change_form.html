@@ -1,0 +1,80 @@
+{% extends "admin/change_form.html" %}
+{% load i18n admin_urls static admin_modify %}
+
+{% block after_field_sets %}
+{{ block.super }}
+
+<div class="module aligned">
+    <h2>Frame Suggestions</h2>
+    
+    {% if original %}
+        <div class="form-row">
+            <div class="field-box">
+                <p>Get frame suggestions based on this entity's properties.</p>
+                
+                <div id="frame-suggestions-container">
+                    {% if original.frames.exists %}
+                        <h3>Current Frames</h3>
+                        <ul>
+                            {% for frame in original.frames.all %}
+                                <li>
+                                    <a href="{% url 'admin:coreapp_frame_change' frame.id %}">
+                                        {{ frame.name }} (ID: {{ frame.fnid }})
+                                    </a>
+                                    {% if frame.is_primary %}(Primary){% endif %}
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p>No frames associated with this entity yet.</p>
+                    {% endif %}
+                    
+                    <div class="submit-row" style="margin: 15px 0;">
+                        <a href="{% url 'admin:entity-frame-suggestions' original.id %}" class="button">
+                            {% trans 'Get Frame Suggestions' %}
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+</div>
+
+<style>
+    /* Custom styles for the frame suggestions section */
+    #frame-suggestions-container {
+        margin: 15px 0;
+        padding: 15px;
+        background: #f8f8f8;
+        border: 1px solid #e0e0e0;
+        border-radius: 4px;
+    }
+    
+    #frame-suggestions-container h3 {
+        margin-top: 0;
+        color: #666;
+    }
+    
+    #frame-suggestions-container ul {
+        margin: 10px 0 15px 20px;
+        padding: 0;
+    }
+    
+    #frame-suggestions-container li {
+        margin-bottom: 5px;
+    }
+    
+    .submit-row a.button {
+        background: #417690;
+        color: white;
+        padding: 8px 15px;
+        text-decoration: none;
+        border-radius: 4px;
+        display: inline-block;
+    }
+    
+    .submit-row a.button:hover {
+        background: #205067;
+    }
+</style>
+{% endblock %}

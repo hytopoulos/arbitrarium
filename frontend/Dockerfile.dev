@@ -1,0 +1,14 @@
+# Development stage
+FROM node:20-alpine
+
+WORKDIR /frontend
+
+# Install dependencies
+COPY package*.json ./
+RUN npm install --legacy-peer-deps
+
+# Expose the port the app runs on
+EXPOSE 8080
+
+# Start the development server
+CMD ["npm", "start"]

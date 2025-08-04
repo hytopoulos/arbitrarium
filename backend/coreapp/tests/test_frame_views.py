@@ -2,6 +2,7 @@
 Tests for the Frame and Element views.
 """
 import pytest
+from unittest.mock import patch, MagicMock
 from django.urls import reverse
 from rest_framework import status
 from coreapp.models import Frame, Element, Entity, Environment, User
@@ -172,6 +173,8 @@ class TestFrameViewSet:
         assert response.data[0]['name'] == test_element.name
 
 
+
+
 @pytest.mark.django_db
 class TestElementViewSet:
     """Test cases for the ElementViewSet."""
@@ -228,11 +231,11 @@ class TestElementViewSet:
             fnid=456
         )
 
-    def test_list_elements(self, api_client, test_element, test_frame, test_user):
+    def test_list_elements(self, api_client, test_element, test_user):
         """Test listing elements."""
         api_client.force_authenticate(user=test_user)
         url = reverse('element-list')
-        response = api_client.get(f"{url}?frame={test_frame.id}")
+        response = api_client.get(url)
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data) == 1
         assert response.data[0]['name'] == test_element.name

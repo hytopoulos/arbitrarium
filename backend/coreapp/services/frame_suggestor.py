@@ -5,12 +5,16 @@ from django.core.cache import cache
 from django.conf import settings
 from coreapp.models import Entity, Frame
 from arb import util
+from coreapp.services.framenet import FrameNetService
 import logging
 
 logger = logging.getLogger(__name__)
 
 # Cache timeout in seconds (1 hour)
 CACHE_TIMEOUT = 60 * 60
+
+# Initialize FrameNet service
+framenet_service = FrameNetService()
 
 class FrameSuggestor:
     """
@@ -98,8 +102,88 @@ class FrameSuggestor:
             logger.error(f"Error suggesting frames for entity {entity.id}: {str(e)}", exc_info=True)
             return []
     
-    @staticmethod
-    def _suggest_frames_from_related(synset, max_depth: int = 2) -> List[Dict[str, Any]]:
+    @classmethod
+    def get_all_frame_types(cls) -> List[Dict[str, Any]]:
+        """
+        Get all available frame types from FrameNet.
+        
+        Returns:
+            List of dictionaries containing frame type information
+        """
+        try:
+            # Check if FrameNet service is properly initialized
+            if not framenet_service:
+                logger.error("FrameNet service is not initialized")
+                return []
+                
+            logger.info("Fetching frames from FrameNet service...")
+            frames = framenet_service.get_all_frames()
+            
+            if not frames:
+                logger.warning("No frames returned from FrameNet service")
+                return []
+                
+            result = []
+            for frame in frames:
+                try:
+                    frame_id = frame.get('ID')
+                    frame_name = frame.get('name', f'frame_{frame_id}' if frame_id else 'unknown_frame')
+                    
+                    frame_data = {
+                        'id': frame_id,
+                        'name': frame_name,
+                        'display_name': frame_name.replace('_', ' ').title(),
+                        'definition': frame.get('definition', ''),
+                        'lex_unit_count': frame.get('lex_unit_count', 0)
+                    }
+                    result.append(frame_data)
+                except Exception as frame_error:
+                    logger.error(f"Error processing frame {frame.get('name', 'unknown')}: {str(frame_error)}", exc_info=True)
+            
+            logger.info(f"Successfully processed {len(result)} frames")
+            return result
+            
+        except Exception as e:
+            logger.error("Error in get_all_frame_types:", exc_info=True)
+            logger.error(f"Error details: {str(e)}")
+            
+            # Log FrameNet service state if available
+            if hasattr(framenet_service, '__dict__'):
+                logger.error(f"FrameNet service state: {framenet_service.__dict__}")
+            else:
+                logger.error("FrameNet service has no __dict__ attribute")
+                
+            # Return an empty list instead of raising an exception to prevent 500 errors
+            # This allows the frontend to handle the empty state gracefully
+            return []
+            
+    @classmethod
+    def get_frame_by_id(cls, frame_id: int) -> Optional[Dict[str, Any]]:
+        """
+        Get a frame by its FrameNet ID.
+        
+        Args:
+            frame_id: The FrameNet ID of the frame to retrieve
+            
+        Returns:
+            Dictionary containing frame information, or None if not found
+        """
+        try:
+            frame = framenet_service.get_frame_by_id(frame_id)
+            if not frame:
+                return None
+                
+            return {
+                'id': frame.get('ID'),
+                'name': frame.get('name', ''),
+                'definition': frame.get('definition', '')
+            }
+        except Exception as e:
+            logger.error(f"Error getting frame by ID {frame_id}: {str(e)}", exc_info=True)
+            return None
+
+    @classmethod
+    def _suggest_frames_from_related(cls, synset, max_depth: int = 2) -> List[Dict[str, Any]]:
         """
         Find frames by exploring related synsets (hypernyms, hyponyms, etc.).
         """

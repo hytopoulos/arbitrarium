@@ -13,6 +13,7 @@ FRAME_DATA = {
     'definition': 'A test frame definition',
     'is_primary': True,
     'fnid': 12345,  # Required field for Frame creation
+    'elements': [],  # Required field by the serializer
 }
 
 ELEMENT_DATA = {
@@ -30,12 +31,15 @@ class TestFrameViewSet:
     def test_create_frame(self, authenticated_client, test_entity):
         """Test creating a new frame."""
         url = reverse('frame-list')
-        data = {**FRAME_DATA, 'entity': test_entity.id}
+        # Ensure entity ID is an integer
+        data = {**FRAME_DATA, 'entity': int(test_entity.id)}
         
         response = authenticated_client.post(url, data, format='json')
-        assert response.status_code == status.HTTP_201_CREATED
+        assert response.status_code == status.HTTP_201_CREATED, f"Expected 201, got {response.status_code}: {response.data}"
         assert Frame.objects.count() == 1
-        assert Frame.objects.get().name == 'Test Frame'
+        frame = Frame.objects.first()
+        assert frame.name == 'Test Frame'
+        assert frame.entity_id == test_entity.id
         
     def test_list_frames(self, authenticated_client, test_frame):
         """Test listing frames."""
@@ -72,34 +76,59 @@ class TestFrameViewSet:
         assert response.status_code == status.HTTP_204_NO_CONTENT
         assert Frame.objects.count() == 0
         
-    def test_suggest_frames(self, authenticated_client, test_entity, monkeypatch):
+    def test_suggest_frames(self, authenticated_client, test_entity, test_environment):
         """Test the frame suggestion endpoint."""
-        # Mock the FrameSuggestor to return test data
-        mock_suggestions = [{
-            'fnid': 'fn123',
-            'name': 'Suggested Frame',
-            'definition': 'A suggested frame',
-            'score': 0.9,
-            'match_type': 'direct',
-            'lex_unit': 'test.lex'
-        }]
+        from unittest.mock import patch, MagicMock
+        from coreapp.services.frame_application import FrameMatch
+        from coreapp.models import Frame
         
-        # Create a mock function to replace suggest_frames
-        def mock_suggest_frames(*args, **kwargs):
-            return mock_suggestions
-            
-        # Apply the monkeypatch to replace suggest_frames with our mock
-        monkeypatch.setattr(
-            'coreapp.services.frame_suggestor.FrameSuggestor.suggest_frames',
-            mock_suggest_frames
+        # Ensure the test entity is associated with the test environment
+        test_entity.environment = test_environment
+        test_entity.save()
+        
+        # Create a test frame
+        test_frame = Frame.objects.create(
+            name='Test Frame',
+            definition='A test frame',
+            fnid=12345,
+            entity=test_entity
         )
         
-        url = f"{reverse('frame-suggest')}?entity_id={test_entity.id}"
-        response = authenticated_client.get(url)
+        # Create a mock FrameMatch object
+        mock_match = FrameMatch(
+            frame=test_frame,
+            score=1.0,
+            role_assignments={'TestRole': test_entity},
+            confidence=0.9
+        )
         
-        assert response.status_code == status.HTTP_200_OK
-        assert len(response.data) == 1
-        assert response.data[0]['name'] == 'Suggested Frame'
+        # Create a mock environment
+        mock_environment = MagicMock()
+        mock_environment.id = test_environment.id
+        
+        # Patch the Environment.objects.get method
+        with patch('coreapp.views.frame.Environment.objects.get', return_value=mock_environment) as mock_env_get, \
+             patch('coreapp.views.frame.FrameApplicator') as mock_applicator:
+            
+            # Configure the mock FrameApplicator
+            mock_instance = mock_applicator.return_value
+            mock_instance.find_applicable_frames.return_value = [mock_match]
+            
+            # Make the request
+            url = f"{reverse('frame-suggest')}?entity_id={test_entity.id}"
+            response = authenticated_client.get(url)
+            
+            # Print response data for debugging
+            print(f"Response status: {response.status_code}")
+            print(f"Response data: {response.data}")
+            
+            # Verify the response
+            assert response.status_code == status.HTTP_200_OK, \
+                f"Expected status code 200, got {response.status_code}. Response: {response.data}"
+            assert len(response.data) == 1, \
+                f"Expected 1 frame suggestion, got {len(response.data)}. Response: {response.data}"
+            assert response.data[0]['name'] == 'Test Frame', \
+                f"Unexpected frame name. Expected 'Test Frame', got {response.data[0].get('name')}"
         
     def test_bulk_create_frames(self, authenticated_client, test_entity):
         """Test bulk creating frames."""

@@ -24,7 +24,7 @@ docker compose build
 
 4. Run docker image
 ```bash
-docker compose up
+docker compose up -d
 ```
 
 5. Add superuser

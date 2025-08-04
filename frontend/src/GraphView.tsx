@@ -1,13 +1,82 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useQuery } from 'react-query';
-import cytoscape, { Core } from 'cytoscape';
-import CytoscapeComponent from "react-cytoscapejs";
+import cytoscape from 'cytoscape';
+import type { Core, EventObject, NodeSingular, EdgeSingular, ElementDefinition, LayoutOptions } from 'cytoscape';
 import coseBilkent from 'cytoscape-cose-bilkent';
-import { Environment, Entity } from './types.ts';
+import { Environment, Entity } from './types';
+import './types/cytoscape-extensions.d';
+
+// Using dynamic import to bypass TypeScript errors with react-cytoscapejs v2.0.0
+const CytoscapeComponent = require('react-cytoscapejs').default as React.ComponentType<{
+  elements: ElementDefinition[];
+  style?: React.CSSProperties;
+  stylesheet?: any[];
+  layout?: any;
+  cy?: (cy: Core) => void;
+  className?: string;
+  key?: string | number;
+  wheelSensitivity?: number;
+  minZoom?: number;
+  maxZoom?: number;
+  zoom?: number;
+  pan?: { x: number; y: number };
+  panningEnabled?: boolean;
+  userPanningEnabled?: boolean;
+  boxSelectionEnabled?: boolean;
+  // Add any other required props here
+}>;
+
+// Define types for Cytoscape elements
+type CytoscapeEvent = EventObject & {
+  target: NodeSingular | EdgeSingular | Core;
+  stopPropagation?: () => void;
+};
+
+type CytoscapeNodeData = {
+  id: string;
+  label: string;
+  entity: Entity;
+  [key: string]: any;
+};
+
+type CytoscapeNode = {
+  data: CytoscapeNodeData;
+  position: { x: number; y: number };
+  classes?: string;
+};
+
+type CytoscapeElement = CytoscapeNode | ElementDefinition;
+
+type Layout = LayoutOptions & {
+  name: string;
+  animate?: boolean;
+  animationEasing?: string;
+  animationDuration?: number;
+  randomize?: boolean;
+  componentSpacing?: number;
+  nodeRepulsion?: number;
+  nodeOverlap?: number;
+  edgeElasticity?: number;
+  nestingFactor?: number;
+  gravity?: number;
+  numIter?: number;
+  initialTemp?: number;
+  coolingFactor?: number;
+  minTemp?: number;
+};
+
+// Extend the window object to include cytoscape
+declare global {
+  interface Window {
+    cytoscape?: (options?: any) => Core;
+  }
+}
+
+// Register the cose-bilkent layout
+// Using type assertion to bypass TypeScript error for 'use' method
+(cytoscape as any).use(coseBilkent);
 
 type CytoscapeType = Core;
-
-cytoscape.use(coseBilkent);
 
 interface Props {
   environment?: Environment[];
@@ -16,51 +85,62 @@ interface Props {
 
 export default function GraphView(props: Props) {
   const [cy, setCy] = useState<CytoscapeType | null>(null);
-  const { isLoading, isError, data, error } = useQuery(['graph', props.environment], () => {
+  const { isLoading, isError, data, error } = useQuery<Entity[]>(['graph', props.environment], async () => {
     if (!props.environment || !props.environment[0]?.id) {
       console.log('No environment selected or environment has no ID');
-      return Promise.resolve([]);
+      return [];
     }
     const envId = props.environment[0].id;
     console.log('Fetching entities for environment:', envId);
-    return fetch(`http://localhost:8000/api/ent/?env=${envId}`, {
-      headers: {
-        'Authorization': `Token ${localStorage.getItem('token')}`,
-        'Content-Type': 'application/json',
-      },
-      credentials: 'include',
-    })
-    .then(response => {
+    
+    try {
+      const response = await fetch(`http://localhost:8000/api/ent/?env=${envId}`, {
+        headers: {
+          'Authorization': `Token ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+      });
+      
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      return response.json();
-    })
-    .catch(error => {
+      
+      return await response.json() as Entity[];
+    } catch (error) {
       console.error('Error fetching entities:', error);
       throw error;
-    });
+    }
   });
 
-  const elements = data ? data.map((entity) => {
+  const elements: CytoscapeElement[] = data ? data.map((entity: Entity) => {
     // Ensure we have a valid entity with required fields
-    const entityWithDefaults = {
-      id: entity.id || '',
-      name: entity.name || 'Unnamed Entity',
-      type: entity.type || 'entity',
+    const { id, name, type, ...restEntity } = entity;
+    const entityWithDefaults: Entity = {
+      id: id || '',
+      name: name || 'Unnamed Entity',
+      type: type || 'entity',
       properties: entity.properties || {},
-      ...entity // Spread any additional properties
+      ...restEntity // Spread any remaining properties
+    };
+    
+    // Create a clean data object for cytoscape
+    const nodeData: CytoscapeNodeData = {
+      id: entityWithDefaults.id,
+      label: entityWithDefaults.name,
+      entity: entityWithDefaults,
+      // Add any additional properties except those already included
+      ...Object.fromEntries(
+        Object.entries(entityWithDefaults)
+          .filter(([key]) => !['id', 'name', 'type', 'properties'].includes(key))
+      )
     };
     
     return {
-      data: { 
-        id: entityWithDefaults.id, 
-        label: entityWithDefaults.name,
-        entity: entityWithDefaults // Store full entity data for selection
-      },
+      data: nodeData,
       position: { x: 0, y: 0 },
       classes: 'entity-node'
-    };
+    } as CytoscapeElement;
   }) : [];
 
   // Log when props change
@@ -71,87 +151,68 @@ export default function GraphView(props: Props) {
     });
   }, [props.environment, props.onEntitySelect]);
 
-  // Handle node selection
+  // Set up event listeners when the component mounts or updates
   useEffect(() => {
     if (!cy) {
       console.log('GraphView: Cytoscape instance not ready');
       return;
     }
 
-    console.log('GraphView: Setting up node selection handlers');
+    console.log('GraphView: Setting up event listeners');
 
-    const handleNodeSelect = (evt: any) => {
-      console.log('GraphView: Node tap event:', evt);
-      const node = evt.target;
+    console.log('GraphView: Setting up event listeners');
+
+    // Define event handlers with proper typing
+    const handleNodeTap = (event: cytoscape.EventObject) => {
+      console.log('GraphView: Node tap handler called', event);
+      const node = event.target;
+      console.log('GraphView: Node data:', node.data());
+      const entity = node.data('entity') as Entity;
+      console.log('GraphView: Extracted entity:', entity);
+      console.log('GraphView: onEntitySelect prop exists:', !!props.onEntitySelect);
       
-      if (node.isNode()) {
-        const nodeId = node.id();
-        const nodeData = node.data();
-        console.log('GraphView: Node clicked', { nodeId, nodeData });
-        
-        // Get the full entity data from the node
-        const entityData = node.data('entity');
-        console.log('GraphView: Entity data from node:', entityData);
-        
-        if (entityData) {
-          // Create a new object to ensure React detects the change
-          const entity = { ...entityData };
-          console.log('GraphView: Calling onEntitySelect with:', entity);
-          
-          // Ensure we have a valid function to call
-          if (typeof props.onEntitySelect === 'function') {
-            props.onEntitySelect(entity);
-          } else {
-            console.error('GraphView: onEntitySelect is not a function', props.onEntitySelect);
-          }
-        } else {
-          console.warn('GraphView: Node clicked but no entity data found:', nodeId);
+      if (entity && props.onEntitySelect) {
+        try {
+          console.log('GraphView: Calling onEntitySelect with entity:', entity);
+          props.onEntitySelect(entity);
+          console.log('GraphView: onEntitySelect call completed');
+        } catch (error) {
+          console.error('GraphView: Error in onEntitySelect:', error);
         }
+      } else {
+        console.log('GraphView: No entity or onEntitySelect handler');
       }
     };
 
-    const handleUnselect = () => {
-      console.log('GraphView: Background tap - clearing selection');
-      if (typeof props.onEntitySelect === 'function') {
+    const handleBackgroundTap = () => {
+      console.log('GraphView: Background tap handler called');
+      if (props.onEntitySelect) {
         props.onEntitySelect(null);
       }
     };
 
-    // Add event listeners with names for easier debugging
-    const nodeTapHandler = (e: any) => {
-      console.log('GraphView: Node tap handler called');
-      // Prevent the event from propagating to the background
-      e.stopPropagation();
-      handleNodeSelect(e);
-    };
-    
-    const backgroundTapHandler = (e: any) => {
-      // Only handle background taps, not taps on nodes or edges
-      if (e.target === cy) {
-        console.log('GraphView: Background tap handler called');
-        handleUnselect();
-      }
-    };
-
-    console.log('GraphView: Adding event listeners');
-    
     // Use 'tap' for nodes with higher priority (runs first)
-    cy.on('tap', 'node', nodeTapHandler, { priority: 1 });
+    (cy as any).on('tap', 'node', handleNodeTap);
     
-    // Use 'tap' for background with lower priority (runs after node tap)
-    cy.on('tap', backgroundTapHandler, { priority: 0 });
+    // Use 'tapstart' for background to prevent interference with node taps
+    (cy as any).on('tapstart', (event: cytoscape.EventObject) => {
+      // If the tap is on the background (not on a node or edge)
+      if (event.target === cy) {
+        handleBackgroundTap();
+      }
+    });
 
     // Cleanup
     return () => {
       console.log('GraphView: Cleaning up event listeners');
-      cy.off('tap', 'node', nodeTapHandler);
-      cy.off('tap', backgroundTapHandler);
+      (cy as any).off('tap', 'node', handleNodeTap);
+      (cy as any).off('tapstart');
     };
   }, [cy, props.onEntitySelect]);
 
   // Handle graph updates - only run when environment changes
   useEffect(() => {
-    if (!cy || elements.length === 0) return;
+    if (!cy || !elements || elements.length === 0) return;
 
     let isMounted = true;
     let layout: any = null;
@@ -162,49 +223,67 @@ export default function GraphView(props: Props) {
       try {
         // Get current node positions before any changes
         const positions: Record<string, { x: number; y: number }> = {};
-        cy.nodes().forEach(node => {
+        const nodes = cy.nodes();
+        
+        for (let i = 0; i < nodes.length; i++) {
+          const node = nodes[i];
           const pos = node.position();
           positions[node.id()] = { x: pos.x, y: pos.y };
-        });
+        }
 
         // Batch graph updates
-        cy.batch(() => {
+        (cy as any).batch(() => {
           // Get current element IDs
-          const currentIds = new Set(cy.elements().map(e => e.id()));
-          const newIds = new Set(elements.map(e => e.data.id));
+          const currentIds = new Set<string>();
+          const allElements = cy.elements();
+          
+          for (let i = 0; i < allElements.length; i++) {
+            currentIds.add(allElements[i].id());
+          }
+          
+          const newIds = new Set<string>();
+          for (let i = 0; i < elements.length; i++) {
+            newIds.add(elements[i].data.id);
+          }
           
           // Remove elements that are no longer in the new data
-          const toRemove = Array.from(currentIds).filter(id => !newIds.has(id));
+          const toRemove: string[] = [];
+          currentIds.forEach(id => {
+            if (!newIds.has(id)) {
+              toRemove.push(id);
+            }
+          });
+          
           if (toRemove.length > 0) {
-            cy.remove(`#${toRemove.join(', #')}`);
+            cy.remove(cy.collection(toRemove.map(id => `#${id}`).join(', ')));
           }
           
           // Add new elements
           const toAdd = elements.filter(el => !currentIds.has(el.data.id));
           if (toAdd.length > 0) {
-            // @ts-ignore - Cytoscape types are not perfect
-            cy.add(toAdd);
+            (cy as any).add(toAdd);
           }
         });
 
         // Restore node positions for existing nodes
-        cy.nodes().forEach(node => {
+        const updatedNodes = cy.nodes();
+        for (let i = 0; i < updatedNodes.length; i++) {
+          const node = updatedNodes[i];
           const pos = positions[node.id()];
           if (pos) {
             node.position(pos);
           }
-        });
+        }
 
         // Only run layout if we don't have any positions (first load)
         const hasPositions = Object.keys(positions).length > 0;
         if (elements.length > 0 && !hasPositions) {
           // Cancel any running layout
           if (layout) {
-            try { layout.stop(); } catch (e) {}
+            try { (layout as any).stop(); } catch (e) {}
           }
 
-          // @ts-ignore - Cytoscape types are not perfect
-          layout = cy.layout({
+          layout = (cy as any).layout({
             name: 'cose-bilkent',
             animate: true,
             animationEasing: 'ease-in-out',
@@ -222,7 +301,7 @@ export default function GraphView(props: Props) {
             minTemp: 1.0
           });
 
-          layout.run();
+          (layout as any).run();
         }
       } catch (error) {
         console.error('Error updating graph:', error);
@@ -270,12 +349,12 @@ export default function GraphView(props: Props) {
 
   // Only render CytoscapeComponent when we have an environment
   // We'll handle empty states in the component itself
-  const shouldRenderGraph = !!props.environment?.[0]?.id;
+  const shouldRenderGraph = Boolean(props.environment && props.environment.length > 0);
   console.log('GraphView render - environment:', props.environment, 'shouldRenderGraph:', shouldRenderGraph);
   
   return (
-    <div className="flex flex-col h-full">
-      <div className="p-2 bg-gray-100 border-b">
+    <div className="flex flex-col h-full min-h-0">
+      <div className="p-2 bg-gray-100 border-b flex-shrink-0">
         {props.environment?.[0]?.name ? (
           <h3 className="font-semibold">{props.environment[0].name}</h3>
         ) : (
@@ -283,11 +362,11 @@ export default function GraphView(props: Props) {
         )}
       </div>
       
-      <div className="flex-1 relative">
+      <div className="flex-1 relative min-h-0">
         {shouldRenderGraph ? (
           <CytoscapeComponent
             key={`cy-${props.environment?.[0]?.id || 'no-env'}`}
-            className="w-full h-full"
+            className="absolute inset-0 w-full h-full"
             cy={(cy) => {
               // Only set cy if it's not already set
               if (!cy) return;
@@ -342,7 +421,19 @@ export default function GraphView(props: Props) {
             ]}
             elements={elements}
             layout={{ name: 'cose-bilkent' }}
-            style={{ width: '100%', height: '100%', border: '1px solid #ddd' }}
+            style={{ 
+              width: '100%', 
+              height: '100%', 
+              border: '1px solid #ddd',
+              minHeight: '400px',
+              position: 'absolute',
+              top: 0,
+              right: 0,
+              bottom: 0,
+              left: 0,
+              backgroundColor: '#fff',
+              zIndex: 1
+            }}
           />
         ) : (
           <div className="flex items-center justify-center h-full text-gray-500">

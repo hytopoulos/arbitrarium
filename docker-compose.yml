@@ -1,3 +1,7 @@
+networks:
+  app_network:
+    driver: bridge
+
 services:
   postgres:
     image: postgres:13
@@ -8,9 +12,18 @@ services:
       - "127.0.0.1:5432:5432"
     volumes:
       - ./postgres:/var/lib/postgresql/data
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "arb", "-d", "arb_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   backend:
-    build: backend
-      # context: backend
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
     cap_drop:
       - all
     cap_add:
@@ -19,6 +32,11 @@ services:
       - setfcap
     env_file:
       - backend/docker.dev.env
+    environment:
+      - DJANGO_SETTINGS_MODULE=mysite.settings
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - DATABASE_URL=postgresql://arb:arb@postgres:5432/arb_test
     ports:
       - "8000:8000"
     security_opt:
@@ -27,21 +45,40 @@ services:
     volumes:
       - ./backend:/backend
     tmpfs:
-      # explicitly mount /dev/shm with exec as dosemu2 requires exec privilege
       - /dev/shm:exec,uid=1000,gid=1000,size=64M,mode=0700
-      # Use a separate tmpfs to prevent a rogue jailed process
-      # from filling /tmp on the parent container
       - /sandbox/tmp:exec,uid=1000,gid=1000,size=64M,mode=0700
+    networks:
+      - app_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
   frontend:
-    build: frontend
+    build: 
+      context: ./frontend
+      dockerfile: Dockerfile
     environment:
-      API_BASE: /api
-      INTERNAL_API_BASE: http://backend:8000/api
+      - NODE_ENV=development
+      - REACT_APP_API_BASE=/api
+      - REACT_APP_INTERNAL_API_BASE=http://localhost:8000/api
     ports:
       - "8080:8080"
     volumes:
       - ./frontend:/frontend
-      - .env:/.env
+      - /frontend/node_modules
+    working_dir: /frontend
+    command: sh -c "npm install && npm start"
+    networks:
+      - app_network
+    depends_on:
+      - backend
+
   nginx:
     image: nginx:1.22-alpine
     ports:
@@ -49,3 +86,8 @@ services:
     volumes:
       - ./nginx:/etc/nginx/conf.d
       - ./backend/media:/media
+    networks:
+      - app_network
+    depends_on:
+      - backend
+      - frontend
