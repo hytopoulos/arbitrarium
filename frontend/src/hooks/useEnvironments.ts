@@ -20,13 +20,15 @@ export function useEnvironments() {
     isLoading: isLoadingEnv,
     error: singleEnvError,
     refetch: fetchEnvironment,
-  } = useApiQuery<Environment>(
-    ['environment', currentEnv?.id],
-    currentEnv ? `/env/${currentEnv.id}/` : '',
+  } = useApiQuery<Environment | null>(
+    ['environment', currentEnv?.id || ''],
+    currentEnv?.id ? `/env/${currentEnv.id}/` : '',
     {
       enabled: !!currentEnv?.id,
       onSuccess: (data) => {
-        setCurrentEnv(data);
+        if (data) {
+          setCurrentEnv(data);
+        }
       },
     }
   );

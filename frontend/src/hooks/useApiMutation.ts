@@ -16,27 +16,38 @@ export function useApiMutation<TData = unknown, TError = Error, TVariables = voi
     key,
     async (variables: TVariables) => {
       const url = typeof endpoint === 'function' ? endpoint(variables) : endpoint;
-      const response = await api(url, {
-        method,
-        body: method !== 'DELETE' ? JSON.stringify(variables) : undefined,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        throw new Error(
-          error.detail || error.message || 'An error occurred while processing your request'
-        );
+      
+      try {
+        // Only POST is currently supported by our API client
+        if (method !== 'POST') {
+          throw new Error(`HTTP ${method} is not supported. Only POST is currently implemented.`);
+        }
+        
+        // Use the POST method for all mutations
+        const response = await api.post(url, variables);
+        
+        // Parse the response JSON
+        const responseData = await response.json().catch(() => ({}));
+        
+        return responseData as TData;
+      } catch (error: any) {
+        // Re-throw the error with a more descriptive message if available
+        const errorMessage = error.data?.detail || 
+                           error.data?.message || 
+                           error.message || 
+                           'An error occurred while processing your request';
+        const errorWithMessage = new Error(errorMessage);
+        
+        // Attach additional error information
+        if (error.status) {
+          (errorWithMessage as any).status = error.status;
+        }
+        if (error.data) {
+          (errorWithMessage as any).data = error.data;
+        }
+        
+        throw errorWithMessage;
       }
-
-      // For DELETE requests, we might not have a response body
-      if (method === 'DELETE' && response.status === 204) {
-        return {} as TData;
-      }
-
-      return response.json();
     },
     options
   );
