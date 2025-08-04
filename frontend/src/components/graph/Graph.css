@@ -79,6 +79,27 @@
   box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
 }
 
+/* IO Pins */
+.io-pin {
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.io-pin-circle {
+  transition: r 0.2s, fill 0.2s;
+}
+
+.io-pin:hover .io-pin-circle {
+  r: 5;
+  fill: #4f46e5;
+}
+
+.io-pin.active .io-pin-circle {
+  r: 5;
+  fill: #4f46e5;
+  filter: drop-shadow(0 0 4px rgba(79, 70, 229, 0.7));
+}
+
 /* Tooltip */
 .graph-tooltip {
   position: absolute;

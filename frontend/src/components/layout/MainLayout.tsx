@@ -1,14 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Environment, Entity } from '../../types';
 import { useResponsive } from '../../hooks/useResponsive';
 import { Box, Flex } from './primitives';
 import { Sidebar } from './Sidebar';
 import { MainContent } from './MainContent';
 import { CorpusSidebar } from './CorpusSidebar';
-import GraphView, { FrameElementAssignment } from '../../GraphViewD3';
+import Graph from '../graph/Graph';
 import EntityView from '../../EntityView';
 import { ToastContainer, toast } from 'react-toastify';
-import { apiRequest } from '../../utils/api';
+import { transformEnvironmentToGraphData, handleFrameElementAssignment } from '../../utils/graphUtils';
 import 'react-toastify/dist/ReactToastify.css';
 
 type GraphViewProps = {
@@ -38,34 +38,32 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   const { isMobile } = useResponsive();
 
   // Handle frame element assignment
-  const handleFrameElementAssign = async (assignment: FrameElementAssignment) => {
+  const handleFrameElementAssign = useCallback(async (assignment: { frameId: string; elementId: string; role?: string }) => {
+    if (!currentEnv) return;
+    
     try {
-      // Make API call to create the frame element relationship
-      await apiRequest('/api/frame-elements/', {
-        method: 'POST',
-        body: JSON.stringify({
-          frame: assignment.frameId,
-          element: assignment.elementId,
-          role: assignment.role || 'element',
-          environment: currentEnv?.id
-        })
-      });
-
-      // Show success message
-      toast.success(`Successfully assigned element as '${assignment.role}'`);
+      const updatedEnv = await handleFrameElementAssignment(
+        assignment,
+        currentEnv,
+        (updatedEnv) => {
+          toast.success(`Successfully assigned element as '${assignment.role || 'element'}'`);
+          onEnvSelected(updatedEnv);
+        }
+      );
       
-      // Instead of toggling the environment, we'll just refresh the current environment
-      // This prevents the infinite update loop
-      if (currentEnv) {
-        // Force a re-render by creating a new object reference
-        onEnvSelected({ ...currentEnv });
-      }
-      
+      return updatedEnv;
     } catch (error) {
       console.error('Failed to assign frame element:', error);
       toast.error('Failed to assign frame element. Please try again.');
+      throw error;
     }
-  };
+  }, [currentEnv, onEnvSelected]);
+  
+  // Transform environment data for the graph
+  const graphData = useMemo(() => {
+    if (!currentEnv) return { nodes: [], links: [] };
+    return transformEnvironmentToGraphData(currentEnv);
+  }, [currentEnv]);
 
   // Close sidebar when an environment is selected on mobile
   useEffect(() => {
@@ -91,10 +89,28 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
           <>
             <Box className="flex-1 overflow-auto">
               <div className="w-full h-full min-h-[60vh]">
-                <GraphView 
-                  environment={[currentEnv]} 
-                  onEntitySelect={onEntitySelect}
-                  onFrameElementAssign={handleFrameElementAssign}
+                <Graph
+                  nodes={graphData.nodes}
+                  links={graphData.links}
+                  onNodeClick={(node, event) => {
+                    // Handle node click (e.g., select entity)
+                    if (node.entity) {
+                      onEntitySelect(node.entity);
+                    }
+                  }}
+                  onNodeHover={(node, event) => {
+                    // Handle node hover (e.g., show tooltip)
+                  }}
+                  onLinkClick={(link, event) => {
+                    // Handle link click if needed
+                  }}
+                  simulationConfig={{
+                    linkDistance: 100,
+                    chargeStrength: -500,
+                    // centerStrength is not a valid property, using centerX/Y instead
+                    centerX: 0.5,
+                    centerY: 0.5
+                  }}
                 />
               </div>
             </Box>

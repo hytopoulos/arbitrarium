@@ -1,7 +1,8 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import * as d3 from 'd3';
-import { GraphNode } from '../types';
+import { GraphNode, FrameElement } from '../../../types/graph';
 import { GraphEventHandlers } from '../types';
+import IOPin from './IOPin';
 
 // Type for D3 drag event
 interface D3DragEvent extends Event {
@@ -60,6 +61,9 @@ const GraphNodes: React.FC<GraphNodesProps> = ({
     });
   }, [onNodeClick, onNodeDrag, onNodeDragEnd]);
 
+  // Track active pin for hover effects
+  const [activePin, setActivePin] = useState<{nodeId: string, elementId: string} | null>(null);
+
   // Handle mouse enter/leave for hover effects
   const handleMouseEnter = useCallback((event: React.MouseEvent, node: GraphNode) => {
     onNodeHover?.(node, event);
@@ -68,6 +72,37 @@ const GraphNodes: React.FC<GraphNodesProps> = ({
   const handleMouseLeave = useCallback((event: React.MouseEvent) => {
     onNodeHover?.(null, event);
   }, [onNodeHover]);
+
+  // Handle pin hover
+  const handlePinMouseEnter = useCallback((e: React.MouseEvent, element: FrameElement) => {
+    e.stopPropagation();
+    const node = nodes.find(n => n.frameElements?.some(fe => fe.id === element.id));
+    if (node) {
+      setActivePin({ nodeId: node.id, elementId: element.id });
+    }
+  }, [nodes]);
+
+  const handlePinMouseLeave = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setActivePin(null);
+  }, []);
+
+  // Calculate pin positions around a node
+  const calculatePinPositions = useCallback((node: GraphNode): Array<{x: number, y: number, element: FrameElement}> => {
+    if (!node.frameElements || !node.frameElements.length) return [];
+    
+    const radius = node.radius || 20; // Default radius if not specified
+    const angleStep = (2 * Math.PI) / node.frameElements.length;
+    
+    return node.frameElements.map((element, index) => {
+      const angle = index * angleStep - Math.PI / 2; // Start from top
+      return {
+        x: Math.cos(angle) * (radius + 15), // 15px from node edge
+        y: Math.sin(angle) * (radius + 15),
+        element
+      };
+    });
+  }, []);
 
   // Create a color scale for different node types
   const colorScale = d3.scaleOrdinal<string>()
@@ -78,6 +113,8 @@ const GraphNodes: React.FC<GraphNodesProps> = ({
     <g className="graph-nodes">
       {nodes.map((node) => {
         if (node.x === undefined || node.y === undefined) return null;
+        
+        const pinPositions = calculatePinPositions(node);
         
         return (
           <g
@@ -96,6 +133,20 @@ const GraphNodes: React.FC<GraphNodesProps> = ({
               d3.select(element).call(drag as any);
             }}
           >
+            {/* Render IO Pins if node has frame elements */}
+            {pinPositions.map(({ x, y, element }: {x: number, y: number, element: FrameElement}, index: number) => (
+              <IOPin
+                key={`${node.id}-pin-${index}`}
+                x={x}
+                y={y}
+                element={element}
+                isActive={activePin?.nodeId === node.id && activePin?.elementId === element.id}
+                onMouseEnter={handlePinMouseEnter}
+                onMouseLeave={handlePinMouseLeave}
+                onMouseDown={(e) => e.stopPropagation()}
+              />
+            ))}
+            
             {/* Node circle */}
             <circle
               r={10}

@@ -33,6 +33,14 @@ export type D3Simulation = d3.Simulation<GraphNode, GraphLink> & {
 };
 
 // Graph types
+export interface FrameElement {
+  id: string;
+  name: string;
+  type: string;
+  // Add other frame element properties as needed
+  [key: string]: any;
+}
+
 export interface GraphNode {
   id: string;
   label: string;
@@ -43,6 +51,8 @@ export interface GraphNode {
   fy?: number | null;
   relatedTo?: string | number;
   type?: 'node' | 'frame' | 'element';
+  frameElements?: FrameElement[]; // For nodes that have IO pins
+  radius?: number; // For pin positioning
   [key: string]: any; // Allow additional properties
 }
 
