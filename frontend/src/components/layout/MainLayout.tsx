@@ -5,7 +5,7 @@ import { Box, Flex } from './primitives';
 import { Sidebar } from './Sidebar';
 import { MainContent } from './MainContent';
 import { CorpusSidebar } from './CorpusSidebar';
-import GraphView from '../../GraphView';
+import GraphView from '../../GraphViewD3';
 import EntityView from '../../EntityView';
 
 type GraphViewProps = {
