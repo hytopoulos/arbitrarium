@@ -2,7 +2,9 @@
 
 Arbitrarium is a web app for simulating stateful entities (dictionary nouns) by applying lexical relationships found in [WordNet](https://wordnet.princeton.edu) and [FrameNet](http://framenet.icsi.berkeley.edu).
 
-![Screenshot of the app](demo.png)
+![Screenshot of the frontend](demo.png)
+
+![Screenshot of the backend](backend.png)
 
 ## Building
 
@@ -30,4 +32,9 @@ docker compose up -d
 5. Add superuser
 ```bash
 docker compose exec backend poetry run python manage.py createsuperuser
+```
+
+6. Run backend tests
+```bash
+docker compose exec backend poetry run python manage.py runtests
 ```
