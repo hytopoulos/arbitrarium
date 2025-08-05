@@ -23,8 +23,6 @@ class TestFrameApplicator:
         self.test_frame = Frame.objects.create(
             entity=self.entity,
             fnid=12345,
-            name='Test Frame',
-            definition='A test frame',
             is_primary=True
         )
         

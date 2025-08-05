@@ -10,8 +10,11 @@ from coreapp.serializers import EntitySerializer
 logger = logging.getLogger(__name__)
 
 class EntityViewSet(ModelViewSet):
-    queryset: BaseManager[Entity] = Entity.objects.all()
     serializer_class = EntitySerializer
+    queryset = Entity.objects.all()
+    
+    def get_queryset(self):
+        return super().get_queryset().select_related('primary_frame').prefetch_related('primary_frame__elements')
 
     def create(self, request: Request) -> Response:
         name = request.data.get('name')
@@ -31,25 +34,19 @@ class EntityViewSet(ModelViewSet):
         env_instance = Environment.objects.get(id=env)
         user_instance = env_instance.user
         
+        # instantiate primary frame
+        primary_frame = Frame.from_lexical_unit_id(fnid)
+
         # Create the entity
         entity = Entity.objects.create(
             name=name, 
             wnid=wnid, 
             fnid=fnid, 
             env=env_instance, 
-            user=user_instance
+            user=user_instance,
+            primary_frame=primary_frame
         )
-        
-        # Create a frame for the entity using its FrameNet ID
-        from coreapp.models import Frame
-        try:
-            # This will automatically create the frame and set up parent relationships
-            frame = Frame.from_framenet(entity=entity, fnid=fnid, is_primary=True)
-            logger.info(f"Created frame {frame.name} (ID: {frame.id}) for entity {entity.id}")
-        except Exception as e:
-            logger.error(f"Failed to create frame for entity {entity.id}: {str(e)}")
-            # Continue even if frame creation fails, as the entity is still valid
-        
+
         serializer = EntitySerializer(entity)
         return Response(serializer.data, status=201)
 

@@ -92,14 +92,14 @@ const GraphNodes: React.FC<GraphNodesProps> = ({
   const calculatePinPositions = useCallback((node: GraphNode): Array<{x: number, y: number, element: Element}> => {
     if (!node.frameElements || !node.frameElements.length) return [];
     
-    const radius = node.radius || 20; // Default radius if not specified
+    const radius = node.radius || 10;
     const angleStep = (2 * Math.PI) / node.frameElements.length;
     
     return node.frameElements.map((element: Element, index: number) => {
-      const angle = index * angleStep - Math.PI / 2; // Start from top
+      const angle = index * angleStep - Math.PI / 2;
       return {
-        x: Math.cos(angle) * (radius + 15), // 15px from node edge
-        y: Math.sin(angle) * (radius + 15),
+        x: Math.cos(angle) * radius,
+        y: Math.sin(angle) * radius,
         element
       };
     });

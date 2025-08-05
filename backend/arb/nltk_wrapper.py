@@ -141,3 +141,16 @@ class NLTKFrameNetWrapper:
         except Exception as e:
             logger.error(f"Error getting frame by ID {frame_id}", exc_info=True)
             return None
+
+    def get_frame_by_lexical_unit_id(self, lexical_unit_id: int) -> Optional[Dict[str, Any]]:
+        """
+        Get a frame by its lexical unit ID.
+        
+        Args:
+            lexical_unit_id: The ID of the lexical unit to retrieve
+            
+        Returns:
+            Dictionary containing frame information or None if not found
+        """
+        logger.info(f"Fetching frame with lexical unit ID: {lexical_unit_id}")
+        return self.fn.lexUnit[lexical_unit_id].frame

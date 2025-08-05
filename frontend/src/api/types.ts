@@ -10,10 +10,11 @@ export interface Environment {
 }
 
 export interface Entity {
-  id: string;
+  id: number;
   name: string;
   type?: string;
-  frames?: Frame[];
+  frames: Frame[];
+  primary_frame: Frame;
   properties?: Record<string, any>;
   [key: string]: any;
 }
@@ -24,8 +25,8 @@ export interface Frame {
   frame_type: string;  // Required field for frame type
   definition?: string;
   fnid?: string | number;
-  is_primary?: boolean;
-  elements?: Element[];
+  is_primary: boolean;
+  elements: Element[];
   created_at?: string;
   updated_at?: string;
   entity?: string | number;

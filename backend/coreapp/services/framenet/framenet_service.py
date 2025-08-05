@@ -79,3 +79,16 @@ class FrameNetService:
         """
         logger.info(f"Fetching frame with ID: {frame_id}")
         return self._wrapper.get_frame_by_id(frame_id)
+
+    def from_lexical_unit_id(self, lexical_unit_id: int) -> Optional[Dict[str, Any]]:
+        """
+        Get a frame by its lexical unit ID.
+        
+        Args:
+            lexical_unit_id: The ID of the lexical unit to retrieve
+            
+        Returns:
+            Dictionary containing frame information or None if not found
+        """
+        logger.info(f"Fetching frame with lexical unit ID: {lexical_unit_id}")
+        return self._wrapper.get_frame_by_lexical_unit_id(lexical_unit_id)

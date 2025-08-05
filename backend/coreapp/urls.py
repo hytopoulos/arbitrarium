@@ -26,7 +26,7 @@ urlpatterns += [path(route='', view=include(environment_router.urls))]
 ## Entity API routes
 from .views import entity
 entity_router = DefaultRouter()
-entity_router.register(r'ent', entity.EntityViewSet)
+entity_router.register(r'ent', entity.EntityViewSet, basename='entity')
 urlpatterns += [path(route='', view=include(entity_router.urls))]
 
 ## Corpus API routes

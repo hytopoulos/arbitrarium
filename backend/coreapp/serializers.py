@@ -39,17 +39,17 @@ class EnvironmentSerializer(serializers.ModelSerializer):
             
         return environment
 
-
-class EntitySerializer(serializers.ModelSerializer):
-    frames = serializers.PrimaryKeyRelatedField(many=True, queryset=Frame.objects)
-
+class ElementSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Entity
-        fields = ['id', 'user', 'env', 'name', 'wnid', 'fnid', 'created_at', 'updated_at', 'frames']
-
+        model = Element
+        fields = [
+            'id', 'frame', 'fnid', 'name', 'core_type', 'definition',
+            'value', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['created_at', 'updated_at']
 
 class FrameSerializer(serializers.ModelSerializer):
-    elements = serializers.PrimaryKeyRelatedField(many=True, queryset=Element.objects.all(), required=False)
+    elements = ElementSerializer(many=True, read_only=True)
     framenet_name = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
@@ -74,12 +74,11 @@ class FrameSerializer(serializers.ModelSerializer):
             logger.warning(f"Could not fetch FrameNet name for frame {obj.id}: {str(e)}")
             return None
 
+class EntitySerializer(serializers.ModelSerializer):
+    frames = serializers.PrimaryKeyRelatedField(many=True, queryset=Frame.objects)
+    primary_frame = FrameSerializer(read_only=True)
 
-class ElementSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Element
-        fields = [
-            'id', 'frame', 'fnid', 'name', 'core_type', 'definition',
-            'value', 'created_at', 'updated_at'
-        ]
+        model = Entity
+        fields = ['id', 'user', 'env', 'name', 'wnid', 'fnid', 'created_at', 'updated_at', 'frames', 'primary_frame']
         read_only_fields = ['created_at', 'updated_at']

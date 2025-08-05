@@ -150,12 +150,12 @@ class FrameApplicatorTest(TestCase):
         # Arrange - Create frames for both entities
         frame1 = Frame.objects.create(
             entity=self.entity1,
-            name='TestFrame',
+            fnid=12345,
             is_primary=True
         )
         frame2 = Frame.objects.create(
             entity=self.entity2,
-            name='TestFrame',
+            fnid=12345,
             is_primary=True
         )
         
@@ -201,12 +201,12 @@ class FrameApplicatorTest(TestCase):
         # Arrange - Create frames for both entities
         frame1 = Frame.objects.create(
             entity=self.entity1,
-            name='TestFrame',
+            fnid=12345,
             is_primary=True
         )
         frame2 = Frame.objects.create(
             entity=self.entity2,
-            name='TestFrame',
+            fnid=12345,
             is_primary=True
         )
         

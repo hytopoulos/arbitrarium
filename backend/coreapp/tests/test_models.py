@@ -20,8 +20,7 @@ def test_frame_validation(test_entity):
     """Test frame validation, particularly for primary frame uniqueness."""
     # Create a primary frame
     frame1 = Frame.objects.create(
-        name='Primary Frame',
-        definition='Primary frame',
+        fnid=12345,
         is_primary=True,
         entity=test_entity
     )
@@ -29,8 +28,7 @@ def test_frame_validation(test_entity):
     # Creating another primary frame for the same entity should work
     # but the first one should be demoted
     frame2 = Frame.objects.create(
-        name='New Primary Frame',
-        definition='New primary frame',
+        fnid=12345,
         is_primary=True,
         entity=test_entity
     )

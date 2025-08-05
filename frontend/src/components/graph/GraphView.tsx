@@ -1,20 +1,13 @@
 import React, { useCallback, useEffect, useState, useMemo } from 'react';
-import { Environment, Entity } from '../../api/types';
+import { Environment, Entity, Element } from '../../api/types';
 import Graph from './Graph';
 import { GraphNode, GraphLink } from './types';
 import { useQuery } from 'react-query';
 import { api } from '../../api/config';
 
-interface FrameElementAssignment {
-  frameId: string;
-  elementId: string;
-  role?: string;
-}
-
 interface GraphViewProps {
   environment?: Environment[];
   onEntitySelect?: (entity: Entity | null) => void;
-  onFrameElementAssign?: (assignment: FrameElementAssignment) => Promise<void>;
   className?: string;
 }
 
@@ -25,7 +18,6 @@ interface GraphViewProps {
 const GraphView: React.FC<GraphViewProps> = ({
   environment,
   onEntitySelect,
-  onFrameElementAssign,
   className = '',
 }) => {
   const [selectedEntity, setSelectedEntity] = useState<Entity | null>(null);
@@ -38,9 +30,9 @@ const GraphView: React.FC<GraphViewProps> = ({
         return [];
       }
       
-      const response = await api.get(`/env/${environment[0].id}/`);
+      const response = await api.get(`/ent/?env=${environment[0].id}`);
       const data = await response.json();
-      return data.entities;
+      return data;
     },
     {
       enabled: !!environment?.[0]?.id,
@@ -48,44 +40,50 @@ const GraphView: React.FC<GraphViewProps> = ({
   );
 
   // Process nodes from entities
-  const nodes: GraphNode[] = useMemo(() => {
-    return entities.map((entity: Entity) => ({
-      id: `entity-${entity.id}`,
-      label: entity.name || `Entity ${entity.id}`,
-      entity,
-      type: 'node',
-    }));
-  }, [entities]);
+  const nodes: GraphNode[] = useMemo(() =>
+    entities.map((e: Entity) => {
+      const id = e.id;
+      const primaryFrame = e.primary_frame;
+      if (!primaryFrame) {
+        console.log(`Entity ${e.name} has no primary frame.`);
+      }
 
-  // Process links between entities
+      return {
+        id: `entity-${id}`,
+        label: e.name ?? `Entity ${id}`,
+        entity: e,
+        type: 'node',
+        frameElements: primaryFrame?.elements?.map((f: Element) => ({
+          id: `element-${f.id}`,
+          label: f.name ?? `Element ${f.id}`,
+          element: f,
+          type: 'element',
+        })) || [],
+      };
+    }),
+    [entities]
+  );
+
   const links: GraphLink[] = useMemo(() => {
-    const result: GraphLink[] = [];
-    
-    entities.forEach((entity: Entity) => {
-      // Add relationships as links
-      if (entity.relationships) {
-        entity.relationships.forEach((rel: { target_id: string; relationship_type?: string }) => {
-          result.push({
-            source: `entity-${entity.id}`,
-            target: `entity-${rel.target_id}`,
-            type: rel.relationship_type || 'related',
-          });
-        });
+    return entities.flatMap((e: Entity) => {
+      const primaryFrame = e.primary_frame;
+      if (!primaryFrame) {
+        console.log(`Entity ${e.name} has no primary frame.`);
+        return [];
       }
-      
-      // Add frame-element relationships
-      if (entity.frame_elements) {
-        entity.frame_elements.forEach((fe: { frame_id: string }) => {
-          result.push({
-            source: `entity-${entity.id}`,
-            target: `frame-${fe.frame_id}`,
-            type: 'frame-element',
+
+      const links: GraphLink[] = [];
+      for (const element of primaryFrame.elements) {
+        if (element.value) {
+          links.push({
+            source: `entity-${e.id}`,
+            target: `entity-${element.value}`,
+            type: 'element',
           });
-        });
+        }
       }
+      return links;
     });
-    
-    return result;
   }, [entities]);
 
   // Handle node click
@@ -140,7 +138,11 @@ const GraphView: React.FC<GraphViewProps> = ({
   }
 
   return (
-    <div className={`graph-view-container ${className}`} onClick={handleBackgroundClick}>
+    <div
+        className={`graph-view-container w-full h-full ${className}`}
+        style={{ width: '100%', height: '100%' }}
+        onClick={handleBackgroundClick}
+      >
       <Graph
         nodes={nodes}
         links={links}

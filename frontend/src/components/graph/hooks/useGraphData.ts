@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useQuery } from 'react-query';
-import { Environment } from '../../../api/types';
+import { Entity, Environment } from '../../../api/types';
 import { GraphNode, GraphLink } from '../types';
-import { API_BASE_URL } from '../../../api/config';
+import { api } from '../../../api/config';
 
 interface UseGraphDataProps {
   environment?: Environment[];
@@ -19,21 +19,15 @@ export const useGraphData = ({ environment, onDataLoad }: UseGraphDataProps) => 
   const [error, setError] = useState<Error | null>(null);
 
   // Fetch entities data
-  const { data: entities = [], isLoading: isLoadingEntities } = useQuery<GraphNode[]>(
+  const { data: entities = [], isLoading: isLoadingEntities } = useQuery<Entity[]>(
     ['graph-entities', environment],
     async () => {
       if (!environment?.[0]?.id) return [];
-      
-      const response = await fetch(`${API_BASE_URL}/api/entities/?environment_id=${environment[0].id}`);
-      if (!response.ok) throw new Error('Failed to fetch entities');
+
+      const response = await api.get(`/ent/?env=${environment[0].id}`);
       const data = await response.json();
-      
-      return data.map((entity: any) => ({
-        id: `entity-${entity.id}`,
-        label: entity.name || `Entity ${entity.id}`,
-        entity,
-        type: 'node',
-      }));
+
+      return data;
     },
     {
       enabled: !!environment?.[0]?.id,
@@ -50,27 +44,17 @@ export const useGraphData = ({ environment, onDataLoad }: UseGraphDataProps) => 
         setIsLoading(true);
         
         // Process nodes
-        const processedNodes: GraphNode[] = [...entities];
-        
-        // Process links (example: relationships between entities)
-        const processedLinks: GraphLink[] = [];
-        
-        // Add relationships as links
-        entities.forEach((entity: any) => {
-          if (entity.relationships) {
-            entity.relationships.forEach((rel: any) => {
-              processedLinks.push({
-                source: `entity-${entity.id}`,
-                target: `entity-${rel.target_id}`,
-                type: rel.relationship_type,
-              });
-            });
-          }
+        const processedNodes: GraphNode[] = entities.map((entity: Entity) => {
+          return {
+            id: `entity-${entity.id}`,
+            label: entity.name || `Entity ${entity.id}`,
+            entity,
+            type: 'node',
+          };
         });
         
         setNodes(processedNodes);
-        setLinks(processedLinks);
-        onDataLoad?.({ nodes: processedNodes, links: processedLinks });
+        onDataLoad?.({ nodes: processedNodes, links: [] });
       } catch (err) {
         setError(err as Error);
       } finally {

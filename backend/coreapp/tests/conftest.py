@@ -57,7 +57,7 @@ def test_entity(test_user, test_environment):
 def test_frame(test_entity):
     """Create and return a test frame."""
     return Frame.objects.create(
-        name='Test Frame',
+        fnid=1,
         definition='A test frame definition',
         is_primary=True,
         entity=test_entity

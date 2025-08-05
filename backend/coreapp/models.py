@@ -231,6 +231,7 @@ class Entity(models.Model):
     wnid = models.IntegerField(null=True, blank=True)
     # framenet id
     fnid = models.IntegerField(null=True, blank=True)
+    primary_frame = models.ForeignKey('Frame', on_delete=models.SET_NULL, null=True, blank=True, related_name='primary_for_entity')
     # Active frames this entity is participating in
     active_frames = models.JSONField(default=dict, help_text="Frames this entity is currently participating in")
     # Inventory of items this entity possesses
@@ -485,6 +486,12 @@ class Frame(models.Model):
                 logger.warning(f"Could not populate frame elements for frame {frame.id}: {str(e)}")
         
         return frame
+
+    def from_lexical_unit_id(self, lexical_unit_id):
+        from coreapp.services.framenet.framenet_service import FrameNetService
+        frame_net = FrameNetService()
+        frame_data = frame_net.from_lexical_unit_id(lexical_unit_id)
+        return self.from_framenet(frame_data)
 
     def save(self, *args, **kwargs):
         # If this frame is being set as primary, demote any existing primary frames for this entity

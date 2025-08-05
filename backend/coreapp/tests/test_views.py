@@ -88,8 +88,6 @@ class TestFrameViewSet:
         
         # Create a test frame
         test_frame = Frame.objects.create(
-            name='Test Frame',
-            definition='A test frame',
             fnid=12345,
             entity=test_entity
         )

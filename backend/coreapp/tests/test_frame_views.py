@@ -48,10 +48,8 @@ class TestFrameViewSet:
     def test_frame(self, test_entity):
         return Frame.objects.create(
             entity=test_entity,
-            name='Test Frame',
-            definition='A test frame',
+            fnid=123,
             is_primary=True,
-            fnid=123
         )
 
     @pytest.fixture
@@ -133,10 +131,8 @@ class TestFrameViewSet:
         # Create a second frame
         frame2 = Frame.objects.create(
             entity=test_entity,
-            name='Second Frame',
-            definition='Another test frame',
+            fnid=456,
             is_primary=False,
-            fnid=456
         )
         
         # The URL name for the set_primary action should be 'frame-set-primary' (basename + url_name)
@@ -214,10 +210,8 @@ class TestElementViewSet:
     def test_frame(self, test_entity):
         return Frame.objects.create(
             entity=test_entity,
-            name='Test Frame',
-            definition='A test frame',
+            fnid=123,
             is_primary=True,
-            fnid=123
         )
 
     @pytest.fixture
