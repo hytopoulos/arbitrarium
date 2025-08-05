@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import * as d3 from 'd3';
-import { GraphNode, FrameElement } from '../../../types/graph';
+import { GraphNode } from '../types';
+import { Element } from '../../../api/types';
 import { GraphEventHandlers } from '../types';
 import IOPin from './IOPin';
 
@@ -74,9 +75,9 @@ const GraphNodes: React.FC<GraphNodesProps> = ({
   }, [onNodeHover]);
 
   // Handle pin hover
-  const handlePinMouseEnter = useCallback((e: React.MouseEvent, element: FrameElement) => {
+  const handlePinMouseEnter = useCallback((e: React.MouseEvent, element: Element) => {
     e.stopPropagation();
-    const node = nodes.find(n => n.frameElements?.some(fe => fe.id === element.id));
+    const node = nodes.find(n => n.frameElements?.some((fe: Element) => fe.id === element.id));
     if (node) {
       setActivePin({ nodeId: node.id, elementId: element.id });
     }
@@ -88,13 +89,13 @@ const GraphNodes: React.FC<GraphNodesProps> = ({
   }, []);
 
   // Calculate pin positions around a node
-  const calculatePinPositions = useCallback((node: GraphNode): Array<{x: number, y: number, element: FrameElement}> => {
+  const calculatePinPositions = useCallback((node: GraphNode): Array<{x: number, y: number, element: Element}> => {
     if (!node.frameElements || !node.frameElements.length) return [];
     
     const radius = node.radius || 20; // Default radius if not specified
     const angleStep = (2 * Math.PI) / node.frameElements.length;
     
-    return node.frameElements.map((element, index) => {
+    return node.frameElements.map((element: Element, index: number) => {
       const angle = index * angleStep - Math.PI / 2; // Start from top
       return {
         x: Math.cos(angle) * (radius + 15), // 15px from node edge
@@ -134,7 +135,7 @@ const GraphNodes: React.FC<GraphNodesProps> = ({
             }}
           >
             {/* Render IO Pins if node has frame elements */}
-            {pinPositions.map(({ x, y, element }: {x: number, y: number, element: FrameElement}, index: number) => (
+            {pinPositions.map(({ x, y, element }: {x: number, y: number, element: Element}, index: number) => (
               <IOPin
                 key={`${node.id}-pin-${index}`}
                 x={x}

@@ -1,14 +1,14 @@
 import React from 'react';
-import { FrameElement } from 'types/graph';
+import { Element } from '../../../api/types';
 
 interface IOPinProps {
   x: number;
   y: number;
-  element: FrameElement;
+  element: Element;
   isActive?: boolean;
-  onMouseEnter: (e: React.MouseEvent, element: FrameElement) => void;
+  onMouseEnter: (e: React.MouseEvent, element: Element) => void;
   onMouseLeave: (e: React.MouseEvent) => void;
-  onClick?: (e: React.MouseEvent, element: FrameElement) => void;
+  onClick?: (e: React.MouseEvent, element: Element) => void;
   onMouseDown?: (e: React.MouseEvent) => void;
 }
 

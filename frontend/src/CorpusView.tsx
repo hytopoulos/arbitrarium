@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery } from 'react-query';
 import { api } from './api/config';
-import { Environment, User } from './types';
+import { Environment, User } from './api/types';
 
 interface CorpusEntry {
     id: number;

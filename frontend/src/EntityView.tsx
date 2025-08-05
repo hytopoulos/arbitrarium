@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Entity, Frame } from './types';
+import { Entity, Frame } from './api/types';
 import { getFramesForEntity, createFrame, createElement, setPrimaryFrame, getFrameTypes, FrameType, getFrameElements, FrameElement } from './api/frameApi';
 
 interface EntityViewProps {

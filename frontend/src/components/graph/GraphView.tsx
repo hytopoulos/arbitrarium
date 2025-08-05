@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useState, useMemo } from 'react';
-import { Environment, Entity } from '../../types';
+import { Environment, Entity } from '../../api/types';
 import Graph from './Graph';
 import { GraphNode, GraphLink } from './types';
 import { useQuery } from 'react-query';
-import { API_BASE_URL } from '../../api/config';
+import { api } from '../../api/config';
 
 interface FrameElementAssignment {
   frameId: string;
@@ -34,11 +34,13 @@ const GraphView: React.FC<GraphViewProps> = ({
   const { data: entities = [], isLoading, error } = useQuery<Entity[]>(
     ['graph-entities', environment],
     async () => {
-      if (!environment?.[0]?.id) return [];
+      if (!environment?.[0]?.id) {
+        return [];
+      }
       
-      const response = await fetch(`${API_BASE_URL}/api/entities/?environment_id=${environment[0].id}`);
-      if (!response.ok) throw new Error('Failed to fetch entities');
-      return response.json();
+      const response = await api.get(`/env/${environment[0].id}/`);
+      const data = await response.json();
+      return data.entities;
     },
     {
       enabled: !!environment?.[0]?.id,
@@ -47,7 +49,7 @@ const GraphView: React.FC<GraphViewProps> = ({
 
   // Process nodes from entities
   const nodes: GraphNode[] = useMemo(() => {
-    return entities.map(entity => ({
+    return entities.map((entity: Entity) => ({
       id: `entity-${entity.id}`,
       label: entity.name || `Entity ${entity.id}`,
       entity,
@@ -59,7 +61,7 @@ const GraphView: React.FC<GraphViewProps> = ({
   const links: GraphLink[] = useMemo(() => {
     const result: GraphLink[] = [];
     
-    entities.forEach(entity => {
+    entities.forEach((entity: Entity) => {
       // Add relationships as links
       if (entity.relationships) {
         entity.relationships.forEach((rel: { target_id: string; relationship_type?: string }) => {

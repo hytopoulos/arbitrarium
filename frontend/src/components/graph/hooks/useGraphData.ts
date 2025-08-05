@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useQuery } from 'react-query';
-import { Environment } from '../../../types';
+import { Environment } from '../../../api/types';
 import { GraphNode, GraphLink } from '../types';
 import { API_BASE_URL } from '../../../api/config';
 

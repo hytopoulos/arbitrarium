@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useQuery } from 'react-query';
 import { FiAlertCircle, FiLoader, FiPlus, FiServer, FiCheck } from 'react-icons/fi';
-import { Environment } from './types';
+import { Environment } from './api/types';
 import { api } from './api/config';
 
 interface Props {

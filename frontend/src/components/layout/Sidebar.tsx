@@ -1,5 +1,5 @@
 import React from 'react';
-import { Environment } from '../../types';
+import { Environment } from '../../api/types';
 import { Box, Flex } from './primitives';
 import { Button } from './Button';
 import { useResponsive } from '../../hooks/useResponsive';

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Environment } from '../../types';
+import { Environment } from '../../api/types';
 import { Box, Flex } from './primitives';
 import { Button } from './Button';
 import { FiX } from 'react-icons/fi';

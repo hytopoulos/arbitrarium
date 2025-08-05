@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { Environment } from '../types';
+import { Environment } from '../api/types';
 import { useApiQuery } from './useApiQuery';
 
 export function useEnvironments() {

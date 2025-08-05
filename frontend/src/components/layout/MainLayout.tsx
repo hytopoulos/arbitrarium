@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Environment, Entity } from '../../types';
+import { Environment, Entity } from '../../api/types';
 import { useResponsive } from '../../hooks/useResponsive';
 import { Box, Flex } from './primitives';
 import { Sidebar } from './Sidebar';
@@ -10,6 +10,7 @@ import EntityView from '../../EntityView';
 import { ToastContainer, toast } from 'react-toastify';
 import { transformEnvironmentToGraphData, handleFrameElementAssignment } from '../../utils/graphUtils';
 import 'react-toastify/dist/ReactToastify.css';
+import GraphView from 'components/graph/GraphView';
 
 type GraphViewProps = {
   environment: Environment[];
@@ -59,12 +60,6 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
     }
   }, [currentEnv, onEnvSelected]);
   
-  // Transform environment data for the graph
-  const graphData = useMemo(() => {
-    if (!currentEnv) return { nodes: [], links: [] };
-    return transformEnvironmentToGraphData(currentEnv);
-  }, [currentEnv]);
-
   // Close sidebar when an environment is selected on mobile
   useEffect(() => {
     if (isMobile && currentEnv && isSidebarOpen) {
@@ -89,29 +84,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
           <>
             <Box className="flex-1 overflow-auto">
               <div className="w-full h-full min-h-[60vh]">
-                <Graph
-                  nodes={graphData.nodes}
-                  links={graphData.links}
-                  onNodeClick={(node, event) => {
-                    // Handle node click (e.g., select entity)
-                    if (node.entity) {
-                      onEntitySelect(node.entity);
-                    }
-                  }}
-                  onNodeHover={(node, event) => {
-                    // Handle node hover (e.g., show tooltip)
-                  }}
-                  onLinkClick={(link, event) => {
-                    // Handle link click if needed
-                  }}
-                  simulationConfig={{
-                    linkDistance: 100,
-                    chargeStrength: -500,
-                    // centerStrength is not a valid property, using centerX/Y instead
-                    centerX: 0.5,
-                    centerY: 0.5
-                  }}
-                />
+                <GraphView environment={[currentEnv]} />
               </div>
             </Box>
             {selectedEntity && (

@@ -1,4 +1,4 @@
-import { Frame, Element } from '../types';
+import { Frame, Element } from './types';
 import { api } from './config';
 
 export interface FrameType {

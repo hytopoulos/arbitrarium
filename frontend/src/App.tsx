@@ -4,7 +4,7 @@ import { FiInfo } from 'react-icons/fi';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { useEnvironments } from './hooks/useEnvironments';
 import UserLogin from './UserLogin';
-import { Entity } from './types';
+import { Entity } from './api/types';
 import { MainLayout } from './components/layout/MainLayout';
 import { Page } from './components/layout/Page';
 import './App.css';

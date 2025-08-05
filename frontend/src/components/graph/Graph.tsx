@@ -5,8 +5,7 @@ import {
   GraphLink, 
   GraphProps, 
   GraphEventHandlers,
-  D3Simulation
-} from '../../types/graph';
+} from './types';
 import { useGraphSimulation } from 'components/graph/hooks/useGraphSimulation';
 import { useGraphZoom } from 'components/graph/hooks/useGraphZoom';
 import { GraphNodes } from 'components/graph/nodes/GraphNodes';
@@ -88,7 +87,7 @@ const Graph: React.FC<GraphProps> = ({
   // Call onSimulationTick when simulation updates
   useEffect(() => {
     if (simulation && onSimulationTick) {
-      const tickHandler = () => onSimulationTick([...(simulation as D3Simulation).nodes()]);
+      const tickHandler = () => onSimulationTick([...(simulation).nodes()]);
       simulation.on('tick', tickHandler);
       return () => {
         simulation.on('tick', null);

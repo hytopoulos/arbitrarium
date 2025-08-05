@@ -1,6 +1,6 @@
 import React from 'react';
 import { FiRefreshCw, FiLogIn, FiUser, FiLogOut, FiMenu, FiDatabase } from 'react-icons/fi';
-import { User, Environment } from '../../types';
+import { User, Environment } from '../../api/types';
 
 interface HeaderProps {
   currentEnv: Environment | null;

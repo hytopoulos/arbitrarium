@@ -1,4 +1,4 @@
-import { Entity } from '../../../types';
+import { Entity } from '../../../api/types';
 
 /**
  * Base node type for the graph
